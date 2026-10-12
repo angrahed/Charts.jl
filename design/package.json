@@ -1,0 +1,8 @@
+{
+  "name": "charts-design-doc",
+  "private": true,
+  "type": "module",
+  "description": "Builds the design document for the Julia grammar of graphics (HTML printed to PDF by headless Chrome)",
+  "scripts": { "build": "node build.mjs" },
+  "devDependencies": { "marked": "^14.1.4" }
+}

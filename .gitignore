@@ -1,0 +1,13 @@
+# The research PDFs (271 MB) stay out of the package.
+literature/
+Manifest.toml
+design/node_modules/
+design/build/
+runtime/node_modules/
+runtime/test/pages/
+*.DS_Store
+/scratch/
+runtime/test/emitted/
+
+# The companion's intermediate figures, pages and photographs
+companion/build/

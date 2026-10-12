@@ -1,0 +1,245 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:charts-jl:schema:scene:1.0",
+  "title": "Charts.jl scene, schema 1.0",
+  "description": "A fully resolved chart, as every Charts.jl renderer reads it. Lengths are points (1/72 inch) from the top-left corner. Data marks carry ids naming their layer and row: l<layer>-r<row> for rows drawn as they are, l<layer>-s<entry> for computed rows, l<layer>-g<group> for paths. The interaction subtree, present in scenes built for the web, is what the web runtime reads.",
+  "type": "object",
+  "required": ["schema", "width", "height", "title", "description", "summary", "rules", "root"],
+  "properties": {
+    "schema": { "type": "string", "pattern": "^1\\.[0-9]+\\.[0-9]+$", "description": "The schema's version: 1.x readers read any 1.y scene." },
+    "width": { "type": "number", "minimum": 0 },
+    "height": { "type": "number", "minimum": 0 },
+    "title": { "type": "string" },
+    "description": { "type": "string", "description": "Level 1 (Lundgard and Satyanarayan 2022): how the chart is built." },
+    "summary": { "type": "string", "description": "Level 2: the statistics a reader would look for." },
+    "rules": { "type": "array", "items": { "$ref": "#/$defs/rule" }, "description": "The decision behind each default, as explain() prints them." },
+    "root": { "$ref": "#/$defs/group" },
+    "interaction": { "$ref": "#/$defs/interaction" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "rule": {
+      "type": "object",
+      "required": ["property", "value", "rule", "because"],
+      "properties": { "property": { "type": "string" }, "value": { "type": "string" }, "rule": { "type": "string" }, "because": { "type": "string" } },
+      "additionalProperties": false
+    },
+    "colour": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+    "paint": { "oneOf": [{ "$ref": "#/$defs/colour" }, { "type": "null" }] },
+    "point": { "type": "array", "prefixItems": [{ "type": "number" }, { "type": "number" }], "minItems": 2, "maxItems": 2 },
+    "box": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4, "description": "x, y, width, height" },
+    "unit": { "type": "number", "minimum": 0, "maximum": 1 },
+    "base64": { "type": "string", "contentEncoding": "base64", "description": "Little-endian binary: 32-bit floats for geometry, 32-bit integers for indices." },
+    "style": {
+      "type": "object",
+      "required": ["fill", "stroke", "width", "opacity", "dash", "fillopacity", "strokeopacity", "cap", "join"],
+      "properties": {
+        "fill": { "$ref": "#/$defs/paint" },
+        "stroke": { "$ref": "#/$defs/paint" },
+        "width": { "type": "number", "minimum": 0, "description": "The stroke's width, in points." },
+        "opacity": { "$ref": "#/$defs/unit" },
+        "dash": { "oneOf": [{ "type": "string" }, { "type": "null" }], "description": "An SVG dash pattern, in points." },
+        "fillopacity": { "$ref": "#/$defs/unit" },
+        "strokeopacity": { "$ref": "#/$defs/unit" },
+        "cap": { "enum": ["butt", "round", "square"] },
+        "join": { "enum": ["miter", "round", "bevel"] }
+      },
+      "additionalProperties": false
+    },
+    "id": { "type": "string", "description": "A data mark's id (^l\\d), or a role such as tick, key, label or zero." },
+    "node": {
+      "oneOf": [
+        { "$ref": "#/$defs/group" }, { "$ref": "#/$defs/rect" }, { "$ref": "#/$defs/circle" }, { "$ref": "#/$defs/path" },
+        { "$ref": "#/$defs/polygon" }, { "$ref": "#/$defs/symbol" }, { "$ref": "#/$defs/gradient" }, { "$ref": "#/$defs/text" },
+        { "$ref": "#/$defs/batch" }
+      ]
+    },
+    "group": {
+      "type": "object",
+      "required": ["type", "role", "key", "clip", "data", "children"],
+      "properties": {
+        "type": { "const": "group" },
+        "role": { "type": "string", "description": "chart, text, legend, panels, panel, grid, zero, marks, bands, annotations, axis-x, axis-y, label, link, navigator, ..." },
+        "key": { "type": "string", "description": "What the group stands for, such as a series (s2)." },
+        "clip": { "oneOf": [{ "$ref": "#/$defs/box" }, { "type": "null" }] },
+        "data": { "type": "object", "additionalProperties": { "type": "string" }, "description": "More for the runtime: a link's href, an annotation's anchor." },
+        "children": { "type": "array", "items": { "$ref": "#/$defs/node" } }
+      },
+      "additionalProperties": false
+    },
+    "rect": {
+      "type": "object",
+      "required": ["type", "x", "y", "w", "h", "r", "style", "id"],
+      "properties": {
+        "type": { "const": "rect" }, "x": { "type": "number" }, "y": { "type": "number" }, "w": { "type": "number" }, "h": { "type": "number" },
+        "r": { "type": "number", "minimum": 0, "description": "The corners' radius." }, "style": { "$ref": "#/$defs/style" }, "id": { "$ref": "#/$defs/id" }
+      },
+      "additionalProperties": false
+    },
+    "circle": {
+      "type": "object",
+      "required": ["type", "x", "y", "r", "style", "id"],
+      "properties": {
+        "type": { "const": "circle" }, "x": { "type": "number" }, "y": { "type": "number" }, "r": { "type": "number", "minimum": 0 },
+        "style": { "$ref": "#/$defs/style" }, "id": { "$ref": "#/$defs/id" }
+      },
+      "additionalProperties": false
+    },
+    "path": {
+      "type": "object",
+      "required": ["type", "points", "style", "id"],
+      "properties": {
+        "type": { "const": "path" }, "points": { "type": "array", "items": { "$ref": "#/$defs/point" } },
+        "style": { "$ref": "#/$defs/style", "description": "A path is stroked, never filled." }, "id": { "$ref": "#/$defs/id" }
+      },
+      "additionalProperties": false
+    },
+    "polygon": {
+      "type": "object",
+      "required": ["type", "points", "style", "id"],
+      "properties": {
+        "type": { "const": "polygon" }, "points": { "type": "array", "items": { "$ref": "#/$defs/point" } },
+        "style": { "$ref": "#/$defs/style" }, "id": { "$ref": "#/$defs/id" }
+      },
+      "additionalProperties": false
+    },
+    "symbol": {
+      "type": "object",
+      "required": ["type", "x", "y", "r", "shape", "style", "id"],
+      "properties": {
+        "type": { "const": "symbol" }, "x": { "type": "number" }, "y": { "type": "number" },
+        "r": { "type": "number", "minimum": 0, "description": "The radius of the circle with the same area." },
+        "shape": { "enum": ["square", "triangle", "diamond", "triangledown", "cross", "plus"] },
+        "style": { "$ref": "#/$defs/style" }, "id": { "$ref": "#/$defs/id" }
+      },
+      "additionalProperties": false
+    },
+    "gradient": {
+      "type": "object",
+      "required": ["type", "x", "y", "w", "h", "stops", "id"],
+      "properties": {
+        "type": { "const": "gradient" }, "x": { "type": "number" }, "y": { "type": "number" }, "w": { "type": "number" }, "h": { "type": "number" },
+        "stops": { "type": "array", "items": { "$ref": "#/$defs/colour" }, "minItems": 1, "description": "Evenly spaced, left to right." },
+        "id": { "$ref": "#/$defs/id" }
+      },
+      "additionalProperties": false
+    },
+    "text": {
+      "type": "object",
+      "required": ["type", "text", "x", "y", "font", "size", "fill", "anchor", "width", "id", "halo", "halowidth", "opacity"],
+      "properties": {
+        "type": { "const": "text" }, "text": { "type": "string" },
+        "x": { "type": "number" }, "y": { "type": "number", "description": "The baseline." },
+        "font": {
+          "type": "object", "required": ["family", "weight", "style"],
+          "properties": { "family": { "type": "string" }, "weight": { "type": "integer", "minimum": 100, "maximum": 900 }, "style": { "enum": ["normal", "italic"] } },
+          "additionalProperties": false
+        },
+        "size": { "type": "number", "exclusiveMinimum": 0 },
+        "fill": { "$ref": "#/$defs/colour" },
+        "anchor": { "enum": ["start", "middle", "end"] },
+        "width": { "type": "number", "minimum": 0, "description": "Measured from the font file, without kerning: renderers switch kerning and ligatures off." },
+        "id": { "type": "string" },
+        "halo": { "$ref": "#/$defs/paint", "description": "A stroke behind the letters." },
+        "halowidth": { "type": "number", "minimum": 0 },
+        "opacity": { "$ref": "#/$defs/unit" }
+      },
+      "additionalProperties": false
+    },
+    "batch": {
+      "type": "object",
+      "description": "The marks of one layer in one panel, too many to draw one by one. Print rasterises it; the web runtime draws it on a Canvas or with WebGL.",
+      "required": ["type", "kind", "layer", "render", "x", "y", "w", "h", "styles", "shapes", "style", "entry", "hex", "box"],
+      "properties": {
+        "type": { "const": "batch" },
+        "kind": { "enum": ["point", "rect", "hex"] },
+        "layer": { "type": "integer", "minimum": 1 },
+        "render": { "enum": ["raster", "canvas", "webgl"] },
+        "x": { "$ref": "#/$defs/base64", "description": "Centres of points and hexagons; rectangles' left edges (32-bit floats)." },
+        "y": { "$ref": "#/$defs/base64" },
+        "w": { "$ref": "#/$defs/base64", "description": "Rectangles' widths; points' radii." },
+        "h": { "$ref": "#/$defs/base64", "description": "Rectangles' heights." },
+        "styles": { "type": "array", "items": { "$ref": "#/$defs/style" } },
+        "shapes": { "type": "array", "items": { "enum": ["circle", "square", "triangle", "diamond", "triangledown", "cross", "plus", "none"] }, "description": "Per style." },
+        "style": { "$ref": "#/$defs/base64", "description": "Per mark, into styles, from 0 (32-bit integers)." },
+        "entry": { "$ref": "#/$defs/base64", "description": "Per mark, the layer's entry, from 0 (32-bit integers)." },
+        "hex": { "$ref": "#/$defs/point", "description": "Hexagons: the corner offsets for a circumradius of 1, in points." },
+        "box": { "$ref": "#/$defs/box", "description": "What the batch covers: the panel and the room around it." }
+      },
+      "additionalProperties": false
+    },
+    "interaction": {
+      "type": "object",
+      "description": "What the web runtime reads besides the drawing. Indices count from 0, with -1 for none.",
+      "required": ["behaviours", "x", "y", "panels", "series", "layers", "style"],
+      "properties": {
+        "behaviours": { "type": "object" },
+        "x": { "$ref": "#/$defs/axis" },
+        "y": { "$ref": "#/$defs/axis" },
+        "panels": {
+          "type": "array",
+          "items": {
+            "type": "object", "required": ["x0", "y0", "x1", "y1", "label"],
+            "properties": { "x0": { "type": "number" }, "y0": { "type": "number" }, "x1": { "type": "number" }, "y1": { "type": "number" }, "label": { "type": "string" } },
+            "additionalProperties": false
+          }
+        },
+        "series": {
+          "type": "array",
+          "items": { "type": "object", "required": ["name", "color"], "properties": { "name": { "type": "string" }, "color": { "$ref": "#/$defs/colour" } }, "additionalProperties": false }
+        },
+        "layers": { "type": "array", "items": { "$ref": "#/$defs/layer" } },
+        "style": { "type": "object", "description": "Theme values the runtime draws with." }
+      },
+      "additionalProperties": false
+    },
+    "axis": {
+      "type": "object",
+      "required": ["aes", "kind", "domain", "transform", "time", "format", "ticks", "labels", "levels", "label", "zero", "loose", "expand", "m", "limits", "range"],
+      "properties": {
+        "aes": { "enum": ["x", "y"] },
+        "kind": { "enum": ["continuous", "categorical"] },
+        "domain": { "$ref": "#/$defs/point", "description": "In the transformed space; (0, 1) for categories." },
+        "transform": { "enum": ["identity", "log10", "log2", "log", "sqrt"] },
+        "time": { "enum": ["none", "date", "datetime"] },
+        "format": {},
+        "ticks": { "type": "array", "items": { "type": "number" } },
+        "labels": { "type": "array", "items": { "type": "string" } },
+        "levels": { "type": "array", "items": { "type": "string" } },
+        "label": { "type": "string" },
+        "zero": { "type": "boolean" },
+        "loose": { "type": "boolean" },
+        "expand": { "type": "number" },
+        "m": { "type": "integer" },
+        "limits": { "type": "array", "items": { "type": ["number", "null"] }, "minItems": 2, "maxItems": 2 },
+        "range": { "type": "array", "items": { "type": "string" }, "minItems": 2, "maxItems": 2 }
+      },
+      "additionalProperties": false
+    },
+    "layer": {
+      "type": "object",
+      "description": "The data behind a layer's marks: an entry per row, each written for tooltips and tables, or, for a dense layer, its columns as numbers.",
+      "required": ["index", "mark", "fields", "main", "colorfield", "series", "panel", "ids", "paths", "position", "orientation", "hit"],
+      "properties": {
+        "index": { "type": "integer", "minimum": 1 },
+        "mark": { "type": "string" },
+        "fields": { "type": "array", "items": { "type": "string" } },
+        "main": { "type": "integer" },
+        "colorfield": { "type": "integer" },
+        "entries": { "type": "array", "items": { "type": "array", "items": { "type": "string" } } },
+        "series": {},
+        "panel": {},
+        "key": { "type": "array", "items": { "type": ["number", "null"] } },
+        "value": { "type": "array", "items": { "type": ["number", "null"] } },
+        "ids": { "enum": ["r", "s"] },
+        "rows": { "type": "array", "items": { "type": "integer" } },
+        "paths": { "type": "array" },
+        "position": { "enum": ["none", "stack", "fill", "dodge", "jitter"] },
+        "orientation": { "enum": ["vertical", "horizontal"] },
+        "hit": { "type": "boolean" },
+        "dense": { "type": "object" },
+        "n": { "type": "integer" }
+      }
+    }
+  }
+}

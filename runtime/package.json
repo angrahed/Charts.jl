@@ -1,0 +1,22 @@
+{
+  "name": "charts-jl-runtime",
+  "private": true,
+  "type": "module",
+  "description": "The web runtime of Charts.jl: tooltips, hover, legend, zoom, keys and the accessibility tree for charts drawn as SVG by Julia",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "tsc --noEmit -p .",
+    "test": "node --test test/unit.test.mjs",
+    "test:browser": "node --test test/browser.test.mjs",
+    "test:emit": "node --test test/emit.test.mjs"
+  },
+  "devDependencies": {
+    "ajv": "^8.20.0",
+    "echarts": "^6.1.0",
+    "esbuild": "^0.25.0",
+    "puppeteer-core": "^24.0.0",
+    "typescript": "^5.9.0",
+    "vega": "^6.4.0",
+    "vega-lite": "^6.5.0"
+  }
+}
