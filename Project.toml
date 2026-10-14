@@ -1,6 +1,6 @@
 name = "Charts"
 uuid = "a742cd1d-7ab8-4948-86e0-63c91f947d36"
-version = "1.0.0"
+version = "0.1.0"
 authors = ["Anton Grahed <an.grahed@gmail.com>"]
 
 [deps]

@@ -2,7 +2,7 @@
 
 A grammar of graphics for Julia: ggplot2's layered grammar with publication-quality defaults, compiled to a public scene that renders to print and to self-contained interactive HTML in the style of Highcharts.
 
-The design is in [`design/charts-jl-design.pdf`](design/charts-jl-design.pdf), and [`companion/charts-jl-companion.pdf`](companion/charts-jl-companion.pdf) walks through the package. This is version 1.0, with all seven of the design's milestones (0 to 6) built:
+The design is in [`design/charts-jl-design.pdf`](design/charts-jl-design.pdf), and [`companion/charts-jl-companion.pdf`](companion/charts-jl-companion.pdf) walks through the package. This is version 0.1.0, with all seven of the design's milestones (0 to 6) built:
 - The core grammar, with the marks, statistics, scales and facets of everyday statistical charts.
 - Print output as PDF, PNG and SVG.
 - The web: interactive HTML that notebooks and Documenter show directly.

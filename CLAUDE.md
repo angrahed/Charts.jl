@@ -15,7 +15,7 @@ Charts.jl is a grammar-of-graphics charting library for Julia. It keeps ggplot2'
 
 - Milestone 6: bridges. The scene's JSON format frozen at schema 1.0.0 (`scene_json`, `read_scene`, `assets/schema/scene-1.0.schema.json`); emitters for Vega-Lite 6.5, ECharts 6.1 and (opt-in, never loaded) Highcharts 13; a Makie extension lowering the scene to SpecApi.
 
-The package is version 1.0.0 (the user chose to call it 1.0; it is not registered). What remains of Part VII is the design's checks: a gallery against the FT Visual Vocabulary in other libraries, invariance tests beyond row order, a print/web parity test, an accessibility gate, and trials of the descriptions with blind and low-vision readers.
+The package is version 0.1.0, its first public release, at github.com/angrahed/Charts.jl (not registered). The user had called it 1.0 before publishing; the companion PDF still says 1.0. What remains of Part VII is the design's checks: a gallery against the FT Visual Vocabulary in other libraries, invariance tests beyond row order, a print/web parity test, an accessibility gate, and trials of the descriptions with blind and low-vision readers.
 
 The design's `select(...)` is named `selection(...)`, because DataFrames exports `select`.
 
