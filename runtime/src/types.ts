@@ -22,6 +22,7 @@ export interface Axis {
   m: number;
   limits: [number | null, number | null];
   range: [string, string];
+  integer?: boolean; // whole-number data (years, counts): ticks at whole numbers
 }
 
 export interface Panel {

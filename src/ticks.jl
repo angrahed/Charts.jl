@@ -15,14 +15,18 @@ struct TickSet
 end
 
 """
-    extended_ticks(dmin, dmax; m = 5, loose = false)
+    extended_ticks(dmin, dmax; m = 5, loose = false, integer = false, nice = true)
 
 Ticks for data from `dmin` to `dmax`, aiming at `m` labels. With `loose`, the
-labels must cover the data. The weights for simplicity, coverage, density and
+labels must cover the data. With `integer`, for whole-number data such as
+years and counts, only whole steps from whole numbers are considered, and
+only 1, 2, 5 and 25 times a power of ten (no axis of years reads 2012.5, or
+counts by threes); `nice = false` drops the second condition, for an axis too
+narrow for any such step to fit. The weights for simplicity, coverage, density and
 legibility are those of the paper: 0.2, 0.25, 0.5 and 0.05.
 """
-function extended_ticks(dmin::Real, dmax::Real; m::Integer = 5, loose::Bool = false,
-                        Q = (1.0, 5.0, 2.0, 2.5, 4.0, 3.0), w = (0.2, 0.25, 0.5, 0.05))
+function extended_ticks(dmin::Real, dmax::Real; m::Integer = 5, loose::Bool = false, integer::Bool = false, nice::Bool = true,
+                        Q = integer && nice ? (1.0, 5.0, 2.0, 2.5) : (1.0, 5.0, 2.0, 2.5, 4.0, 3.0), w = (0.2, 0.25, 0.5, 0.05))
     dmin, dmax = Float64(dmin), Float64(dmax)
     if !(dmax - dmin > 1e-12 * max(1.0, abs(dmin)))
         δ = dmin == 0 ? 1.0 : abs(dmin) / 10
@@ -45,6 +49,9 @@ function extended_ticks(dmin::Real, dmax::Real; m::Integer = 5, loose::Bool = fa
         2 - max(r / rt, rt / r)
     end
     density_max(k) = k >= m ? 2 - (k - 1) / (m - 1) : 1.0
+    whole(x) = abs(x - round(x)) <= 1e-9 * max(1.0, abs(x))
+    # a whole step whose mantissa is 1, 2, 2.5 or 5: skipping (j > 1) may not make 4 or 15 of 2 or 5
+    nicewhole(step) = whole(step) && any(n -> isapprox(step / exp10(floor(log10(step))), n; rtol = 1e-9), (1, 2, 2.5, 5))
 
     best_score, best = -2.0, (0.0, 0.0, 1.0)
     j = 1
@@ -65,12 +72,17 @@ function extended_ticks(dmin::Real, dmax::Real; m::Integer = 5, loose::Bool = fa
                 z = ceil(Int, log10(delta))
                 while z < 30
                     step = j * q * 10.0^z
+                    if integer && !(nice ? nicewhole(step) : whole(step))
+                        z += 1
+                        continue
+                    end
                     cm = coverage_max(step * (k - 1))
                     w[1] * sm + w[2] * cm + w[3] * dm + w[4] < best_score && break
                     min_start = floor(Int, dmax / step) * j - (k - 1) * j
                     max_start = ceil(Int, dmin / step) * j
                     for start in min_start:max_start
                         lmin = start * (step / j)
+                        integer && !whole(lmin) && continue
                         lmax = lmin + step * (k - 1)
                         score = w[1] * simplicity(i, j, lmin, lmax, step) + w[2] * coverage(lmin, lmax) +
                                 w[3] * density(k, lmin, lmax) + w[4]
@@ -90,4 +102,23 @@ function extended_ticks(dmin::Real, dmax::Real; m::Integer = 5, loose::Bool = fa
     digits = max(0, -floor(Int, log10(step)) + 2)
     values = [round(lmin + n * step; digits) for n in 0:round(Int, (lmax - lmin) / step)]
     TickSet(values, step, best_score)
+end
+
+"""
+    thinned(t::TickSet)
+
+Every second or fifth tick of a labeling, whichever first keeps the step nice
+(5 to 10, 2 to 10, 1 to 2), taken where the values are multiples of the new
+step: for an axis too narrow for its labels. `nothing` when fewer than two
+ticks would remain.
+"""
+function thinned(t::TickSet)
+    for k in (2, 5)
+        step = k * t.step
+        q = step / exp10(floor(log10(step)))
+        any(n -> isapprox(q, n; rtol = 1e-9), (1, 2, 2.5, 5)) || continue
+        v = filter(x -> abs(x / step - round(x / step)) < 1e-9, t.values)
+        length(v) >= 2 && return TickSet(v, step, t.score)
+    end
+    nothing
 end

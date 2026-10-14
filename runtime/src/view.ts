@@ -6,6 +6,8 @@
 // is unchanged, and are redrawn from the ticks when it changes.
 
 import { finalizeAxis, type AxisView } from './axis.ts';
+
+const X_SPACING = 6; // base sizes of room for each x label, as X_SPACING in layout.jl
 import { DenseView, lowerX, m4 } from './dense.ts';
 import { PX } from './dom.ts';
 import { f2, num, parsePath, pathData, svgEl, textWidth, type Pt } from './dom.ts';
@@ -521,15 +523,22 @@ export class View {
     }
     const rects = this.panelRects();
     const pw = rects[0].x1 - rects[0].x0;
-    let m = Math.min(10, Math.max(2, Math.round(pw / (9 * s.base))));
+    let m = Math.min(10, Math.max(2, Math.round(pw / (X_SPACING * s.base))));
+    let thin = false; // at two ticks, every second or fifth tick; then, for whole numbers, any whole step, as in layout.jl
+    let nice = true;
     for (;;) {
-      const v = finalizeAxis(a, d[0], d[1], m, { extend: false, loose: false, expand: 0, zero: false, limits: false });
+      const v = finalizeAxis(a, d[0], d[1], m, { extend: false, loose: false, expand: 0, zero: false, limits: false, nice, thin });
       const pos = v.ticks.map((t) => ((t - d[0]) / (d[1] - d[0])) * pw);
       const w = v.labels.map((l) => textWidth(l, s.label_size, s.font));
+      // where the labels will sit: the first turned in at the left edge, as xlabels draws it
+      const left = pos.map((x, i) => (i === 0 && x - w[i] / 2 < -s.space ? x : x - w[i] / 2));
       let ok = true;
-      for (let i = 1; i < pos.length; i++) if (pos[i] - pos[i - 1] < (w[i] + w[i - 1]) / 2 + 2 * s.space) ok = false;
-      if (ok || m <= 2) return v;
-      m--;
+      for (let i = 1; i < pos.length; i++) if (left[i] - (left[i - 1] + w[i - 1]) < 2 * s.space) ok = false;
+      if (ok) return v;
+      if (m > 2) m--;
+      else if (!thin) thin = true;
+      else if (a.integer && nice) [thin, nice] = [false, false];
+      else return v;
     }
   }
 

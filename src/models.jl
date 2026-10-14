@@ -110,13 +110,13 @@ function axis_model(ctx::Context, s::ContinuousScale, lds, ax::Symbol, f)
     limit(v) = v === nothing ? NaN : v isa Dates.TimeType ? timevalue(v) : forward(s.transform, v)
     AxisModel(ax, :continuous, s.domain, s.transform, s.time, format_model(s.format),
               s.ticks.values, s.labels, String[], s.label, s.zero, loose_axis(lds, ax) && a === nothing && b === nothing,
-              points_only(lds) ? 0.04 : 0.0, Int(get(spec.options, :ticks, 0)), (limit(a), limit(b)), (f(s.lo), f(s.hi)))
+              points_only(lds) ? 0.04 : 0.0, Int(get(spec.options, :ticks, 0)), (limit(a), limit(b)), (f(s.lo), f(s.hi)), s.integer)
 end
 
 function axis_model(ctx::Context, s::CategoricalScale, lds, ax::Symbol, f)
     n = nlevels(s)
     AxisModel(ax, :categorical, (0.0, 1.0), :identity, :none, "custom", [(i - 0.5) / n for i in 1:n], string.(s.levels),
-              string.(s.levels), s.label, false, false, 0.0, 0, (NaN, NaN), (string(first(s.levels)), string(last(s.levels))))
+              string.(s.levels), s.label, false, false, 0.0, 0, (NaN, NaN), (string(first(s.levels)), string(last(s.levels))), false)
 end
 
 # The fields of a layer's tooltip and table, each a label and the formatted

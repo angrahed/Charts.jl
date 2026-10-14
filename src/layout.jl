@@ -71,16 +71,30 @@ function cover(t::TickSet, lo, hi)
     TickSet(v, t.step, t.score)
 end
 
+# Where x labels sit, relative to their panel: centred on their ticks, or
+# turned inwards where they would cross the panel's edges `lo` and `hi`, as
+# the panels draw them (the first label at the left, any at the right).
+label_extents(pos, widths, lo, hi) = map(eachindex(pos)) do k
+    x, w = pos[k], widths[k]
+    k == 1 && x - w / 2 < lo ? (x, x + w) : x + w / 2 > hi ? (x - w, x) : (x - w / 2, x + w / 2)
+end
+
+# Room along the x axis for each label, in base sizes: 51 pt at the default
+# 8.5 pt, so a column-wide chart labels 2010, 2015, 2020 and 2025 (Highcharts
+# spaces x labels 75 pt apart and y labels 54 pt; the y axis here takes one
+# label per 4.5 base sizes).
+const X_SPACING = 6.0
+
 # Ticks that cover [lo, hi] by whole steps. A step added for a sliver of data
 # can leave much of the panel empty; the labeling for one more tick is then
 # taken if it covers the data more tightly. When the axis has no room for more
 # labels (`finer = false`), that labeling's step is doubled instead, if that
 # keeps it nice, and taken only if it adds no tick.
-function covering(lo, hi, m; finer::Bool = true)
+function covering(lo, hi, m; finer::Bool = true, integer::Bool = false, nice::Bool = true)
     used(t) = (hi - lo) / (last(t.values) - first(t.values))
-    t = cover(extended_ticks(lo, hi; m), lo, hi)
+    t = cover(extended_ticks(lo, hi; m, integer, nice), lo, hi)
     used(t) >= 0.6 && return t
-    f = cover(extended_ticks(lo, hi; m = m + 1), lo, hi)
+    f = cover(extended_ticks(lo, hi; m = m + 1, integer, nice), lo, hi)
     if !finer
         q = f.step / exp10(floor(log10(f.step)))              # doubled, 1, 2, 2.5 and 5 stay nice; 3 and 4 do not
         any(n -> isapprox(q, n; rtol = 1e-9), (1, 2, 2.5, 5)) || return t
@@ -95,19 +109,36 @@ end
 # inside [lo, hi]. With few ticks the search may label beyond the data (0 and
 # 100 for 15 to 90), leaving nothing to read; the labelings for more ticks
 # are then tried until two fall inside.
-function inside_ticks(lo, hi, m)
+function inside_ticks(lo, hi, m; integer::Bool = false, nice::Bool = true)
     tol = 1e-9 * (hi - lo)
     inside(t) = count(v -> lo - tol <= v <= hi + tol, t.values)
-    t = extended_ticks(lo, hi; m)
+    t = extended_ticks(lo, hi; m, integer, nice)
     k = m
     while inside(t) < 2 && k < m + 8
         k += 1
-        t = extended_ticks(lo, hi; m = k)
+        t = extended_ticks(lo, hi; m = k, integer, nice)
     end
     t
 end
 
-function finalize!(ctx::Context, s::ContinuousScale, m::Int, extend::Bool, loose::Bool = false, expand::Float64 = 0.0, finer::Bool = true)
+# Ticks on a log axis, in transformed space: whole powers of the base when the
+# data span three or more, every few so the first and last are labelled
+# where the count allows (1, 4, 16 rather than 1, 8); otherwise 1, 2 and 5
+# times the powers of ten (1 times the powers of two) that fall inside.
+function log_ticks(lo, hi, m, transform::Symbol)
+    base = transform === :log10 ? 10.0 : 2.0
+    tol = 1e-9 * max(hi - lo, 1e-12)
+    powers = collect(Float64, ceil(lo):floor(hi))
+    if length(powers) >= 3
+        step = max(1, ceil(Int, (length(powers) - 1) / max(m - 1, 1)))
+        return powers[1:step:end]
+    end
+    sort!(unique(filter(v -> lo - tol <= v <= hi + tol,
+        [forward(transform, f * base^k) for k in floor(Int, lo):ceil(Int, hi) for f in (base == 10 ? (1, 2, 5) : (1,))])))
+end
+
+function finalize!(ctx::Context, s::ContinuousScale, m::Int, extend::Bool, loose::Bool = false, expand::Float64 = 0.0, finer::Bool = true,
+                   nice::Bool = true, thin::Bool = false)
     spec = get(ctx.chart.scales, s.aes, ScaleSpec(s.aes, Dict{Symbol,Any}()))
     m = get(spec.options, :ticks, m)
     lo, hi = s.lo - s.pad, s.hi + s.pad
@@ -131,16 +162,8 @@ function finalize!(ctx::Context, s::ContinuousScale, m::Int, extend::Bool, loose
         return s
     end
     if s.transform in (:log10, :log2)
-        base = s.transform === :log10 ? 10.0 : 2.0
         lo == hi && ((lo, hi) = (lo - 1, hi + 1))
-        powers = collect(Float64, ceil(lo):floor(hi))
-        values = if length(powers) >= 3
-            step = max(1, ceil(Int, length(powers) / m))
-            powers[1:step:end]
-        else
-            sort!(unique(filter(v -> lo - tol <= v <= hi + tol,
-                [forward(s.transform, f * base^k) for k in floor(Int, lo):ceil(Int, hi) for f in (base == 10 ? (1, 2, 5) : (1,))])))
-        end
+        values = log_ticks(lo, hi, m, s.transform)
         s.domain = (lo, hi)
         s.ticks = TickSet(values, 1.0, 0.0)
         s.labels = [format_value(s.format, inverse(s.transform, v), inverse(s.transform, v)) for v in values]
@@ -156,12 +179,14 @@ function finalize!(ctx::Context, s::ContinuousScale, m::Int, extend::Bool, loose
         s.labels = [format_value(s.format, v, dt.step) for v in vals[keep]]
         return s
     end
-    ticks = loose && a === nothing && b === nothing ? covering(lo, hi, m; finer) :
-            extend || hi - lo < 1e-12 ? extended_ticks(lo, hi; m) : inside_ticks(lo, hi, m)
+    integer = s.integer
+    ticks = loose && a === nothing && b === nothing ? covering(lo, hi, m; finer, integer, nice) :
+            extend || hi - lo < 1e-12 ? extended_ticks(lo, hi; m, integer, nice) : inside_ticks(lo, hi, m; integer, nice)
     if extend || hi - lo < 1e-12
         a === nothing && (lo = min(lo, first(ticks.values)))
         b === nothing && (hi = max(hi, last(ticks.values)))
     end
+    thin && (th = thinned(ticks)) !== nothing && (ticks = th)
     tol = 1e-9 * (hi - lo)
     s.domain = (lo, hi)
     s.ticks = TickSet(filter(v -> lo - tol <= v <= hi + tol, ticks.values), ticks.step, ticks.score)
@@ -409,21 +434,35 @@ function layout_pass(ctx::Context, lds, sc::Scales, guide::Symbol, xlines::Int; 
     pw = (CW - left - right - (ncol - 1) * gap) / ncol
     pw < 3lsx && throw(ArgumentError("the chart is too narrow for its panels: make it wider, or use fewer columns"))
 
-    # The x axis: ticks for the panels' width, fewer if labels would collide.
+    # The x axis: ticks for the panels' width (a label for every `X_SPACING`
+    # base sizes), fewer if labels would collide.
     if sc.x isa ContinuousScale
-        m = clamp(round(Int, pw / (9 * basesize(t))), 2, 10)
+        m = clamp(round(Int, pw / (X_SPACING * basesize(t))), 2, 10)
         extend = vaxis == :x || points_only(lds)
         finer = true                       # at two ticks, the covering labeling's finer form goes last
+        thin = false                       # then every second or fifth tick (2010, 2020)
+        nice = true                        # then, for whole numbers, any whole step (2010 and 2025)
         while true
-            finalize!(ctx, sc.x, m, extend, loose_axis(lds, :x), points_only(lds) ? 0.04 : 0.0, finer)
+            finalize!(ctx, sc.x, m, extend, loose_axis(lds, :x), points_only(lds) ? 0.04 : 0.0, finer, nice, thin)
             pos = [normalize(sc.x, v) * pw for v in sc.x.ticks.values]
             widths = [text_width(xface, l, lsx) for l in ticklabels(sc.x)]
-            ok = all(i -> pos[i] - pos[i-1] >= (widths[i] + widths[i-1]) / 2 + 2space, 2:length(pos))
+            # labels sit as the panels will draw them: the first column's turn in at -space, the
+            # others' at the gap's middle; the last column's last label is given room (below)
+            inner = gap / 2 - 1
+            edges = ncol == 1 ? [(-space, Inf)] : [(-space, pw + inner), (-inner, pw + inner), (-inner, Inf)]
+            ok = all(edges) do (lo, hi)
+                ext = label_extents(pos, widths, lo, hi)
+                all(i -> ext[i][1] - ext[i-1][2] >= 2space, 2:length(ext))
+            end
             ok && break
             if m > 2
                 m -= 1
             elseif finer
                 finer = false
+            elseif !thin
+                thin = true
+            elseif sc.x.integer && nice
+                thin, nice = false, false
             else
                 break
             end

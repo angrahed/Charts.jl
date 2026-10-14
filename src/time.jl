@@ -65,7 +65,7 @@ function time_ticks(lo::Real, hi::Real; m::Integer = 5)
     while true
         unit, k, _ = LADDER[i]
         if unit === :year && span / (365.25DAY) > 1.5m
-            years = extended_ticks(Dates.year(fromtime(lo)), Dates.year(fromtime(hi)); m)
+            years = extended_ticks(Dates.year(fromtime(lo)), Dates.year(fromtime(hi)); m, integer = true)
             k = max(1, round(Int, years.step))
         end
         values = calendar_ticks(lo, hi, unit, k)

@@ -78,6 +78,7 @@ mutable struct ContinuousScale <: Scale
     transform::Symbol
     time::Symbol                      # :none, :date or :datetime
     pad::Float64                      # added to each end, for bars on a continuous axis
+    integer::Bool                     # whole-number data (years, counts): ticks at whole numbers
 end
 
 """A categorical position scale: levels to bands across [0, 1]."""

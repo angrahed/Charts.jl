@@ -65,7 +65,7 @@ r2(x) = round(x; digits = 2)
 json(io::IO, a::AxisModel) = json(io, Dict(
     "aes" => a.aes, "kind" => a.kind, "domain" => a.domain, "transform" => a.transform, "time" => a.time,
     "format" => a.format, "ticks" => a.ticks, "labels" => a.labels, "levels" => a.levels, "label" => a.label,
-    "zero" => a.zero, "loose" => a.loose, "expand" => a.expand, "m" => a.m, "limits" => a.limits, "range" => a.range))
+    "zero" => a.zero, "loose" => a.loose, "expand" => a.expand, "m" => a.m, "limits" => a.limits, "range" => a.range, "integer" => a.integer))
 json(io::IO, p::PanelModel) = json(io, Dict("x0" => r2(p.x0), "y0" => r2(p.y0), "x1" => r2(p.x1), "y1" => r2(p.y1), "label" => p.label))
 json(io::IO, s::SeriesModel) = json(io, Dict("name" => s.name, "color" => s.color))
 

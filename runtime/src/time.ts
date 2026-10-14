@@ -85,7 +85,7 @@ export function timeTicks(lo: number, hi: number, m = 5): { values: number[]; un
     const unit = LADDER[i][0];
     let k = LADDER[i][1];
     if (unit === 'year' && span / (365.25 * DAY) > 1.5 * m) {
-      const years = extendedTicks(toDate(lo).getUTCFullYear(), toDate(hi).getUTCFullYear(), m);
+      const years = extendedTicks(toDate(lo).getUTCFullYear(), toDate(hi).getUTCFullYear(), m, false, true);
       k = Math.max(1, Math.round(years.step));
     }
     let values = calendarTicks(lo, hi, unit, k);

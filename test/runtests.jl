@@ -71,6 +71,26 @@ selected("ticks (Talbot et al. 2010)") && @testset "ticks (Talbot et al. 2010)" 
     @test inside(15, 90, 2) ≈ [30, 50, 70, 90]                           # not 0 and 100, which label nothing
     @test inside(17.5, 90, 2) ≈ [20, 60]
     @test C.inside_ticks(0, 215, 2).values == C.extended_ticks(0, 215; m = 2).values   # two inside already
+    # whole-number data: whole steps of 1, 2, 5 or 25 times a power of ten, unless none fits
+    @test C.extended_ticks(2010, 2026; m = 7, integer = true).step == 2               # not 2.5: no 2012.5
+    @test C.extended_ticks(2019, 2026; m = 3, integer = true).step in (1, 2, 5)          # not 4, which skipping makes of 2
+    @test C.extended_ticks(2010, 2026; m = 2, integer = true, nice = false).values ≈ [2010, 2025]
+    @test C.extended_ticks(0, 3; m = 8, integer = true).values ≈ [0, 1, 2, 3]
+    @test C.thinned(C.TickSet([2010.0, 2015, 2020, 2025], 5.0, 0.0)).values ≈ [2010, 2020]
+    @test C.thinned(C.TickSet([2010.0, 2012, 2014, 2016, 2018, 2020], 2.0, 0.0)).values ≈ [2010, 2020]
+    @test C.thinned(C.TickSet([2015.0, 2020], 5.0, 0.0)) === nothing
+    # log axes: both ends labelled where the count allows
+    @test C.log_ticks(0, 4, 2, :log2) == [0, 4] && C.log_ticks(0, 4, 3, :log2) == [0, 2, 4]
+    # a column-wide chart labels x at a useful density, years at whole, nice steps
+    macro2 = (year = repeat(2010:2026, 2), v = sin.(1:34), g = repeat(["a", "b"], inner = 17))
+    labels(c) = build(c; interactive = true).interaction.x.labels
+    @test labels(chart(data(macro2) * mapping(:year, :v, color = :g) * line(); size = (80mm, 60mm))) == ["2010", "2015", "2020", "2025"]
+    @test labels(chart(data(macro2) * mapping(:year, :v, color = :g) * line(); size = (166mm, 60mm)))[1:2] == ["2010", "2012"]
+    @test labels(chart(data((d = [1.0, 2, 4, 8, 16], y = 1:5)) * mapping(:d, :y) * line(), scale(:x; transform = :log2); size = (80mm, 60mm))) ==
+          ["1", "4", "16"]
+    # narrow small multiples: the labels thin to nice steps rather than collide
+    fy = build(chart(data(macro2) * mapping(:year, :v) * line(), facet(:g); size = (80mm, 50mm)); interactive = true).interaction.x
+    @test fy.labels == ["2010", "2015", "2020", "2025"] || fy.labels == ["2010", "2020"]
     # a narrow chart of cells, whose axes are not widened to their ticks, still labels x
     rng = MersenneTwister(5)
     narrow = chart(data((x = 15 .+ 75 .* rand(rng, 4000), y = randn(rng, 4000))) * mapping(:x, :y) * bin2d(), theme(base = 6.4pt); size = (53mm, 52mm))
@@ -148,7 +168,7 @@ selected("theme") && @testset "theme" begin
 end
 
 selected("scales") && @testset "scales" begin
-    s = C.ContinuousScale(:y, 0.0, 10.0, false, (0.0, 10.0), C.TickSet(Float64[], 1.0, 0.0), String[], thousands, "y", :identity, :none, 0.0)
+    s = C.ContinuousScale(:y, 0.0, 10.0, false, (0.0, 10.0), C.TickSet(Float64[], 1.0, 0.0), String[], thousands, "y", :identity, :none, 0.0, false)
     @test invert(s, C.normalize(s, 7.5)) ≈ 7.5
     k = C.CategoricalScale(:x, Any["a", "b", "c"], "x")
     @test invert(k, C.normalize(k, "b")) == "b"
@@ -254,7 +274,7 @@ selected("log") && @testset "log scales" begin
     sc = build(c)
     xlabels = [n.text for n in nodes_of(C.TextNode, sc) if n.id == "axis-x"]
     @test xlabels == ["10", "100", "1,000", "10,000"]
-    s = C.ContinuousScale(:x, 1.0, 4.0, false, (1.0, 4.0), C.TickSet(Float64[], 1.0, 0.0), String[], thousands, "x", :log10, :none, 0.0)
+    s = C.ContinuousScale(:x, 1.0, 4.0, false, (1.0, 4.0), C.TickSet(Float64[], 1.0, 0.0), String[], thousands, "x", :log10, :none, 0.0, false)
     @test invert(s, C.normalize(s, log10(500))) ≈ 500
     @test_throws ArgumentError build(chart(data((k = ["a", "b"], v = [1, 2])) * mapping(:k, :v) * bar(), scale(:y; transform = :log10)))
     @test_throws ArgumentError build(chart(data((x = [0.0, 1.0], y = [1.0, 2.0])) * mapping(:x, :y) * point(), scale(:x; transform = :log10)))
@@ -1045,7 +1065,8 @@ selected("emitters") && @testset "emitters: Vega-Lite, ECharts and Highcharts" b
     @test length(main["data"]["values"]) == 68 && main["width"] > 0
     lines_ = [l for l in main["layer"] if l["mark"]["type"] == "line"]
     @test only(lines_)["encoding"]["color"]["scale"]["range"] == C.CHARTS6[1:4]
-    @test only(lines_)["encoding"]["x"]["axis"]["values"] == [2010, 2015, 2020, 2025]       # Charts.jl's ticks
+    xticks = build(c; interactive = true).interaction.x.ticks
+    @test only(lines_)["encoding"]["x"]["axis"]["values"] == xticks && all(isinteger, xticks)  # Charts.jl's ticks
     @test any(l -> l["mark"]["type"] == "text", main["layer"])                                # line-end labels where the layout put them
     @test vl["title"]["text"] == "The East has grown fastest since 2022"
     # tooltips carry values as Charts.jl writes them
@@ -1054,7 +1075,7 @@ selected("emitters") && @testset "emitters: Vega-Lite, ECharts and Highcharts" b
     @test length(ec["series"]) >= 4 && ec["grid"][1]["left"] > 0 && ec["color"] == C.CHARTS6
     @test ec["xAxis"][1]["type"] == "time" && ec["xAxis"][1]["axisLabel"]["formatter"] == "{yyyy}"   # years without separators
     hc = C.parse_json(highcharts(c))
-    @test hc["xAxis"]["tickPositions"] == [2010, 2015, 2020, 2025] && length(hc["series"]) == 4
+    @test hc["xAxis"]["tickPositions"] == xticks && length(hc["series"]) == 4
     @test hc["credits"]["enabled"] == false && hc["chart"]["width"] > 0
     @test_throws UndefKeywordError Charts.highcharts_html(c)                                 # a licensed copy must be named
     @test occursin("my/highcharts.js", Charts.highcharts_html(c; script = "my/highcharts.js"))

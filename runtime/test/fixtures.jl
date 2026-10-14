@@ -16,9 +16,26 @@ function fixtures()
                    (0, 0), (-0.004, 0.017), (1e6, 3.7e6), (-250, -40), (0.5, 0.5000001), (2010, 2026), (-6, 6.1), (98.2, 101.7))
         for m in (2, 3, 5, 8), loose in (false, true)
             t = C.extended_ticks(a, b; m, loose)
-            push!(ticks, Dict("dmin" => a, "dmax" => b, "m" => m, "loose" => loose, "values" => t.values, "step" => t.step))
+            push!(ticks, Dict("dmin" => a, "dmax" => b, "m" => m, "loose" => loose, "integer" => false, "values" => t.values, "step" => t.step))
         end
     end
+    # whole-number data: years and counts, at densities that would otherwise take fractional steps
+    for (a, b) in ((2010, 2026), (2014, 2019), (2015, 2016), (0, 3), (1, 7), (1990, 2024), (0, 120), (5, 5))
+        for m in (2, 3, 5, 8, 10), loose in (false, true)
+            for nice in (true, false)
+                t = C.extended_ticks(a, b; m, loose, integer = true, nice)
+                push!(ticks, Dict("dmin" => a, "dmax" => b, "m" => m, "loose" => loose, "integer" => true, "nice" => nice,
+                                  "values" => t.values, "step" => t.step))
+            end
+        end
+    end
+    thins = [Dict("values" => t.values, "step" => t.step, "out" => (th = C.thinned(t)) === nothing ? nothing : th.values)
+             for t in (C.TickSet([2010.0, 2015, 2020, 2025], 5.0, 0.0), C.TickSet([0.0, 25, 50, 75, 100], 25.0, 0.0),
+                       C.TickSet([2010.0, 2012, 2014, 2016, 2018, 2020], 2.0, 0.0), C.TickSet([-0.4, -0.2, 0, 0.2, 0.4], 0.2, 0.0),
+                       C.TickSet([2015.0, 2020], 5.0, 0.0), C.TickSet([1.0, 2, 3, 4, 5, 6, 7], 1.0, 0.0))]
+    logs = [Dict("lo" => a, "hi" => b, "m" => m, "transform" => tr, "values" => C.log_ticks(a, b, m, Symbol(tr)))
+            for (a, b, tr) in ((0, 4, "log2"), (0.3, 4.3, "log10"), (-2, 6, "log10"), (3.1, 4.3, "log10"), (0, 5, "log2"), (1, 10, "log2"))
+            for m in (2, 3, 4, 6)]
     covers = Any[]
     for (a, b) in ((0, 41), (-3.7, 41.2), (0.3, 9.6), (-12.5, 3))
         t = C.extended_ticks(a, b)
@@ -43,10 +60,12 @@ function fixtures()
     for f in fmts, (v, step) in ((2.37, 0.5), (12.0, 0.25), (0.0123456, 0.01), (-1.5, 0.1), (1234.5678, 100), (3.0, 0.05), (0.5, 0.025))
         push!(stepped, Dict("format" => C.format_model(f), "v" => v, "step" => step, "out" => C.format_datum(f, v, step)))
     end
-    coverings = [Dict("lo" => a, "hi" => b, "m" => m, "values" => C.covering(a, b, m).values)
-                 for (a, b, m) in ((0, 22, 2), (0, 41, 5), (-0.2786, 0.5474, 3), (63.5, 78.5, 2), (1, 9.7, 4), (-6.2, 4.4, 3))]
-    insides = [Dict("lo" => a, "hi" => b, "m" => m, "values" => C.inside_ticks(a, b, m).values)
-               for (a, b, m) in ((15, 90, 2), (17.5, 90, 2), (16.02, 91.92, 3), (0, 215, 2), (0.31, 0.62, 2), (-3.7, 41.2, 2))]
+    coverings = [Dict("lo" => a, "hi" => b, "m" => m, "integer" => integer, "values" => C.covering(a, b, m; integer).values)
+                 for (a, b, m) in ((0, 22, 2), (0, 41, 5), (-0.2786, 0.5474, 3), (63.5, 78.5, 2), (1, 9.7, 4), (-6.2, 4.4, 3), (2010, 2026, 7))
+                 for integer in (false, true) if !integer || (isinteger(a) && isinteger(b))]
+    insides = [Dict("lo" => a, "hi" => b, "m" => m, "integer" => integer, "values" => C.inside_ticks(a, b, m; integer).values)
+               for (a, b, m) in ((15, 90, 2), (17.5, 90, 2), (16.02, 91.92, 3), (0, 215, 2), (0.31, 0.62, 2), (-3.7, 41.2, 2), (2014.6, 2016.3, 9))
+               for integer in (false, true)]
     # M4 over a wiggly series in order of x, for several windows and widths
     x = collect(0.0:999.0)
     y = [sin(i * 0.37) * 3 + ((i * 7919) % 101) / 10 for i in 0:999]
@@ -74,7 +93,7 @@ function fixtures()
         push!(dates, Dict("v" => C.timevalue(t), "granularity" => g, "out" => C.format_date(C.timevalue(t), g)))
     end
     Dict("ticks" => ticks, "covers" => covers, "formats" => formats, "datums" => datums, "times" => times, "dates" => dates,
-         "patterns" => patterns, "stepped" => stepped, "coverings" => coverings, "insides" => insides, "m4" => m4s)
+         "patterns" => patterns, "stepped" => stepped, "coverings" => coverings, "insides" => insides, "logs" => logs, "thins" => thins, "m4" => m4s)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__

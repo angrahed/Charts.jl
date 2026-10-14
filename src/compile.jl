@@ -663,7 +663,10 @@ function train_position(ctx::Context, lds, ax::Symbol)
         end
     end
     time !== :none && note!(ctx, "$ax.scale", time, "scale-by-type", "the column holds $(time === :date ? "dates" : "times")")
-    ContinuousScale(ax, lo, hi, zero, (lo, hi), TickSet(Float64[], 1.0, 0.0), String[], fmt, label, transform, time, pad)
+    # years and counts: a tick at 2012.5 or 0.5 would name a value the data cannot take
+    integer = time === :none && transform === :identity && all(isinteger, allv) &&
+              (looks_like_years(allv) || all(ld -> !haskey(ld.cols, ax) || nonmissingtype(eltype(ld.cols[ax])) <: Integer, lds))
+    ContinuousScale(ax, lo, hi, zero, (lo, hi), TickSet(Float64[], 1.0, 0.0), String[], fmt, label, transform, time, pad, integer)
 end
 
 function train_color(ctx::Context, lds, levels, aes::Symbol = :color)

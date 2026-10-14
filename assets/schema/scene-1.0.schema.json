@@ -212,7 +212,8 @@
         "expand": { "type": "number" },
         "m": { "type": "integer" },
         "limits": { "type": "array", "items": { "type": ["number", "null"] }, "minItems": 2, "maxItems": 2 },
-        "range": { "type": "array", "items": { "type": "string" }, "minItems": 2, "maxItems": 2 }
+        "range": { "type": "array", "items": { "type": "string" }, "minItems": 2, "maxItems": 2 },
+        "integer": { "type": "boolean", "description": "Whole-number data, such as years and counts: ticks fall on whole numbers. Optional; absent means false." }
       },
       "additionalProperties": false
     },

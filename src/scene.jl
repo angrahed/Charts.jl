@@ -200,6 +200,7 @@ struct AxisModel
     m::Int                            # ticks asked for by the user; 0 to follow the panel's size
     limits::Tuple{Float64,Float64}    # ends fixed by the user; NaN where free
     range::Tuple{String,String}       # the data's extent, written as readers see it
+    integer::Bool                     # whole-number data: ticks at whole numbers only
 end
 
 """One panel: its rectangle in points and, for small multiples, its label."""

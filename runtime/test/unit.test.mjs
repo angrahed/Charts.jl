@@ -5,11 +5,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { extendedTicks, cover, covering, insideTicks } from '../src/ticks.ts';
+import { extendedTicks, cover, covering, insideTicks, thinned } from '../src/ticks.ts';
 import { m4 } from '../src/dense.ts';
 import { formatTick, formatDatum, decimals } from '../src/format.ts';
 import { timeTicks, conciseDates, formatDate, formatPattern } from '../src/time.ts';
-import { finalizeAxis } from '../src/axis.ts';
+import { finalizeAxis, logTicks } from '../src/axis.ts';
 import { dodge } from '../src/view.ts';
 
 const F = JSON.parse(readFileSync(new URL('./fixtures.json', import.meta.url), 'utf8'));
@@ -17,8 +17,8 @@ const close = (a, b) => Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.
 
 test('extended ticks match Julia', () => {
   for (const f of F.ticks) {
-    const t = extendedTicks(f.dmin, f.dmax, f.m, f.loose);
-    const at = `ticks(${f.dmin}, ${f.dmax}; m = ${f.m}, loose = ${f.loose})`;
+    const t = extendedTicks(f.dmin, f.dmax, f.m, f.loose, f.integer, f.nice !== false);
+    const at = `ticks(${f.dmin}, ${f.dmax}; m = ${f.m}, loose = ${f.loose}, integer = ${f.integer}, nice = ${f.nice})`;
     assert.equal(t.values.length, f.values.length, at);
     t.values.forEach((v, i) => assert.ok(close(v, f.values[i]), `${at}: ${t.values} vs ${f.values}`));
     assert.ok(close(t.step, f.step), at);
@@ -47,15 +47,28 @@ test('data formats with the step of the ticks match Julia', () => {
 
 test('covering labelings match Julia', () => {
   for (const f of F.coverings) {
-    const c = covering(f.lo, f.hi, f.m);
+    const c = covering(f.lo, f.hi, f.m, f.integer);
     assert.deepEqual(c.values.map((v) => +v.toPrecision(12)), f.values.map((v) => +v.toPrecision(12)), `covering(${f.lo}, ${f.hi}, ${f.m})`);
   }
 });
 
 test('labelings with two ticks inside match Julia', () => {
   for (const f of F.insides) {
-    const t = insideTicks(f.lo, f.hi, f.m);
+    const t = insideTicks(f.lo, f.hi, f.m, f.integer);
     assert.deepEqual(t.values.map((v) => +v.toPrecision(12)), f.values.map((v) => +v.toPrecision(12)), `insideTicks(${f.lo}, ${f.hi}, ${f.m})`);
+  }
+});
+
+test('thinned labelings match Julia', () => {
+  for (const f of F.thins) {
+    const t = thinned({ values: f.values, step: f.step, score: 0 });
+    assert.deepEqual(t === null ? null : t.values.map((v) => +v.toPrecision(12)), f.out === null ? null : f.out.map((v) => +v.toPrecision(12)), `thinned(${f.values})`);
+  }
+});
+
+test('log ticks match Julia', () => {
+  for (const f of F.logs) {
+    assert.deepEqual(logTicks(f.lo, f.hi, f.m, f.transform), f.values, `logTicks(${f.lo}, ${f.hi}, ${f.m}, ${f.transform})`);
   }
 });
 
