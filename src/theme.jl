@@ -52,8 +52,12 @@ const ELEMENTS = Dict{String,Any}(
     "title.size" => rel(1.5), "title.weight" => 600, "title.color" => :ink, "title.font" => :font, "title.style" => :normal, "title.lineheight" => 1.2,
     "subtitle.size" => rel(1.1), "subtitle.weight" => 400, "subtitle.color" => :ink2, "subtitle.font" => :font, "subtitle.style" => :normal,
     "source.size" => rel(0.9), "source.weight" => 400, "source.color" => :ink2, "source.font" => :font, "source.style" => :normal,
+    "title.align" => :left, "subtitle.align" => :left, "source.align" => :left,
     "axis.label.size" => rel(1.0), "axis.label.weight" => 400, "axis.label.color" => :ink2, "axis.label.font" => :font,
-    "axis.title.size" => rel(0.95), "axis.title.weight" => 400, "axis.title.color" => :ink2, "axis.title.font" => :font,
+    "axis.title.size" => rel(0.95), "axis.title.weight" => 400, "axis.title.color" => :ink2, "axis.title.font" => :font, "axis.title.style" => :normal,
+    # where an axis's title stands: above the panels (:top) or by its axis (:axis); along it (:start is the
+    # left of x and the foot of y); and a y title by its axis turned to read upwards (90) or down (-90)
+    "axis.title.position" => :auto, "axis.title.align" => :auto, "axis.y.title.angle" => :auto,
     "legend.size" => rel(1.0), "legend.weight" => 400, "legend.color" => :ink2, "legend.font" => :font,
     "legend.title.size" => rel(1.0), "legend.title.weight" => 600, "legend.title.color" => :ink, "legend.title.font" => :font, "legend.title.show" => :auto,
     "legend.position" => :top, "legend.key" => 7pt,
@@ -129,9 +133,16 @@ or `"axis.y.label.color" => :ink`. A selector for one axis (`axis.x.…`) takes
 precedence over one for both (`axis.…`). [`show_theme`](@ref) lists every
 element, its value and where the value came from.
 
+Headings align across the chart (`"title.align" => :center`). An axis's title
+stands above the panels or by its axis (`"axis.y.title.position" => :axis`),
+along it (`"axis.x.title.align" => :center`), and a y title by its axis reads
+upwards, as in R and Stata, or down or level (`"axis.y.title.angle" => 0`).
+Placing a title shows it; `"axis.titles" => false` hides it.
+
 ```julia
 house = theme(ink = "#16202a", accent = "#1f63a8", base = 9pt)
 c |> theme(house, "title.size" => rel(1.6), "legend.position" => :right)
+c |> theme("axis.y.title.angle" => 90, "axis.x.title.align" => :center)
 ```
 """
 function theme(base::Theme, elements::Pair{<:AbstractString}...; tokens...)
@@ -228,6 +239,10 @@ const CHOICES = Dict(
     "line.cap" => (:butt, :round, :square),
     "line.join" => (:miter, :round, :bevel),
     "title.style" => (:normal, :italic), "subtitle.style" => (:normal, :italic), "source.style" => (:normal, :italic),
+    "axis.title.style" => (:normal, :italic),
+    "title.align" => (:left, :center, :right), "subtitle.align" => (:left, :center, :right), "source.align" => (:left, :center, :right),
+    "axis.title.position" => (:auto, :top, :axis), "axis.title.align" => (:auto, :start, :center, :end),
+    "axis.title.angle" => (:auto, 0, 90, -90),
     "annotation.style" => (:normal, :italic), "band.label.style" => (:normal, :italic),
     "text.repel" => (:auto, true, false),
     "axis.titles" => (:auto, true, false),
@@ -324,9 +339,12 @@ basesize(t::Theme) = topt(token(t, :base))
 palette(t::Theme) = [hexcolor(c) for c in token(t, :palette)]
 
 # The face for a text element: its family, weight and style.
-element_font(t::Theme, prefix::AbstractString) =
-    font(setting(t, "$prefix.font"), Int(setting(t, "$prefix.weight")),
-         haskey(ELEMENTS, "$prefix.style") ? setting(t, "$prefix.style") : :normal)
+function element_font(t::Theme, prefix::AbstractString)
+    st = "$prefix.style"
+    g = generic(st)
+    styled = haskey(ELEMENTS, st) || (g !== nothing && haskey(ELEMENTS, g))
+    font(setting(t, "$prefix.font"), Int(setting(t, "$prefix.weight")), styled ? setting(t, st) : :normal)
+end
 
 # ---- show_theme ----
 

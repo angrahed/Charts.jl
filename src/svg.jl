@@ -194,6 +194,7 @@ function write_node(io, t::TextNode, uid, w)
     t.halo === nothing || print(io, " stroke=\"", t.halo, "\" stroke-width=\"", fmt(t.halowidth), "\" stroke-linejoin=\"round\" paint-order=\"stroke\"")
     t.opacity < 1 && print(io, " opacity=\"", fmt(t.opacity), "\"")
     t.anchor === :start || print(io, " text-anchor=\"", t.anchor, "\"")
+    t.angle == 0 || print(io, " transform=\"rotate(", fmt(-t.angle), " ", fmt(t.x), " ", fmt(t.y), ")\"")   # SVG turns clockwise
     isempty(t.id) || print(io, " data-role=\"", t.id, "\"")
     print(io, ">", xmlescape(t.text), "</text>")
 end

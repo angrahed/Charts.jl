@@ -142,7 +142,8 @@
         "id": { "type": "string" },
         "halo": { "$ref": "#/$defs/paint", "description": "A stroke behind the letters." },
         "halowidth": { "type": "number", "minimum": 0 },
-        "opacity": { "$ref": "#/$defs/unit" }
+        "opacity": { "$ref": "#/$defs/unit" },
+        "angle": { "type": "number", "description": "Since 1.1. Degrees anticlockwise about (x, y): 90 reads upwards. Absent means 0." }
       },
       "additionalProperties": false
     },

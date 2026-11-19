@@ -1,5 +1,6 @@
 # The scene as JSON: the format every renderer reads, frozen at version 1.0.0
-# (Part V: "the scene is public and versioned"). Tools outside Julia can read a
+# (Part V: "the scene is public and versioned"). Version 1.1.0 adds one
+# optional field, a text's `angle`, so 1.0 readers read any scene without it. Tools outside Julia can read a
 # chart's scene, or write one for Charts.jl's renderers; `read_scene` reads it
 # back. The JSON Schema is assets/schema/scene-1.0.schema.json.
 #
@@ -13,7 +14,7 @@ const SCHEMA_PATH = joinpath(dirname(@__DIR__), "assets", "schema", "scene-1.0.s
     scene_json(scene) -> String
     scene_json(c::Chart; interactive = true) -> String
 
-The scene as JSON, in the frozen format of schema 1.0.0: its size, title,
+The scene as JSON, in the frozen format of schema 1.1.0: its size, title,
 descriptions, the rules behind its defaults, the tree of nodes and, when built
 for the web, the interaction subtree. `save("chart.scene.json", c)` writes it;
 [`read_scene`](@ref) reads it back.
@@ -47,10 +48,14 @@ json(io::IO, n::SymbolNode) = json(io, Dict{String,Any}("type" => "symbol", "x" 
                                                         "style" => n.style, "id" => n.id))
 json(io::IO, n::GradientNode) = json(io, Dict{String,Any}("type" => "gradient", "x" => r2(n.x), "y" => r2(n.y), "w" => r2(n.w), "h" => r2(n.h),
                                                           "stops" => n.stops, "id" => n.id))
-json(io::IO, t::TextNode) = json(io, Dict{String,Any}("type" => "text", "text" => t.text, "x" => r2(t.x), "y" => r2(t.y),
-    "font" => Dict{String,Any}("family" => t.face.family, "weight" => t.face.weight, "style" => t.face.style),
-    "size" => t.size, "fill" => t.fill, "anchor" => t.anchor, "width" => r2(t.width), "id" => t.id, "halo" => t.halo,
-    "halowidth" => t.halowidth, "opacity" => t.opacity))
+function json(io::IO, t::TextNode)
+    d = Dict{String,Any}("type" => "text", "text" => t.text, "x" => r2(t.x), "y" => r2(t.y),
+        "font" => Dict{String,Any}("family" => t.face.family, "weight" => t.face.weight, "style" => t.face.style),
+        "size" => t.size, "fill" => t.fill, "anchor" => t.anchor, "width" => r2(t.width), "id" => t.id, "halo" => t.halo,
+        "halowidth" => t.halowidth, "opacity" => t.opacity)
+    t.angle == 0 || (d["angle"] = t.angle)          # since 1.1; level text leaves it out, as 1.0 wrote it
+    json(io, d)
+end
 json(io::IO, b::BatchNode) = json(io, Dict{String,Any}("type" => "batch", "kind" => b.kind, "layer" => b.layer, "render" => b.render,
     "x" => b64(b.x), "y" => b64(b.y), "w" => b64(b.w), "h" => b64(b.h), "styles" => b.styles, "shapes" => b.shapes,
     "style" => b64(b.style .- Int32(1)), "entry" => b64(b.entry .- Int32(1)), "hex" => collect(b.hex), "box" => collect(r2.(b.box))))
@@ -109,7 +114,7 @@ function read_node(d)
         fd = d["font"]
         face = font(fd["family"], Int(fd["weight"]), Symbol(fd["style"]))
         return TextNode(d["text"], f("x"), f("y"), face, f("size"), d["fill"], Symbol(d["anchor"]), f("width"), d["id"],
-                        d["halo"], f("halowidth"), f("opacity"))
+                        d["halo"], f("halowidth"), f("opacity"), haskey(d, "angle") ? f("angle") : 0.0)
     elseif t == "batch"
         return BatchNode(Symbol(d["kind"]), unb64(Float32, d["x"]), unb64(Float32, d["y"]), unb64(Float32, d["w"]), unb64(Float32, d["h"]),
                          Style[read_style(s) for s in d["styles"]], Symbol.(d["shapes"]), unb64(Int32, d["style"]) .+ Int32(1),

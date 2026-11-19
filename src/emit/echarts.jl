@@ -55,7 +55,12 @@ function echarts_option(c::Chart)
     titles = Any[]
     title = join((n.text for n in heads if n.id == "title"), " ")
     sub = join((n.text for n in heads if n.id in ("subtitle", "axis-title")), "\n")
-    isempty(title) || push!(titles, Dict{String,Any}("text" => title, "subtext" => sub, "left" => topx(first(n.x for n in heads if n.id == "title")), "top" => 0,
+    # across the chart as the layout set it: from the left, centred, or to the right (ECharts aligns the lines to match)
+    align = setting(t, "title.align")
+    across() = (x = first(n.x for n in heads if n.id == "title");
+                align === :center ? Dict{String,Any}("left" => "center") :
+                align === :right ? Dict{String,Any}("right" => topx(e.scene.width - x)) : Dict{String,Any}("left" => topx(x)))
+    isempty(title) || push!(titles, Dict{String,Any}(across()..., "text" => title, "subtext" => sub, "top" => 0,
         "itemGap" => topx(0.6setting(t, "space")), "padding" => 0,
         "textStyle" => Dict("fontSize" => fs("title.size"), "fontWeight" => setting(t, "title.weight"), "color" => setting(t, "title.color"), "fontFamily" => fam),
         "subtextStyle" => Dict("fontSize" => fs("subtitle.size"), "color" => setting(t, "subtitle.color"), "fontFamily" => fam)))
@@ -69,6 +74,11 @@ function echarts_option(c::Chart)
     for n in heads
         n.id == "source" || continue
         push!(graphic, ec_text(n))
+    end
+    # axis titles where the layout set them by their axes, level or turned
+    for n in nodes(e.scene)
+        n isa TextNode && n.id in ("axis-x-title", "axis-y-title") || continue
+        push!(graphic, n.angle == 0 ? ec_text(n) : ec_turned(n))
     end
     append!(graphic, deco)
     guide = m.behaviours[:guide]
@@ -184,6 +194,17 @@ function ec_text(n::TextNode)
     end
     Dict{String,Any}("type" => "text", "left" => topx(n.anchor === :start ? n.x : n.anchor === :end ? n.x - n.width : n.x - n.width / 2),
                      "top" => topx(n.y - n.size * 0.78), "z" => 10, "silent" => true, "style" => style)      # over the marks, as drawn
+end
+
+# Turned text: zrender turns a text about its position, and sets it by the
+# bottom of its letters rather than its baseline, so the position moves down
+# the letters (as they are turned) by the font's descent.
+function ec_turned(n::TextNode)
+    θ = deg2rad(n.angle)
+    d = descent(n.face, n.size)
+    style = Dict{String,Any}("text" => n.text, "fill" => n.fill, "font" => "$(n.face.style === :italic ? "italic " : "")$(n.face.weight) $(topx(n.size))px '$(n.face.family)'",
+                             "align" => n.anchor === :start ? "left" : n.anchor === :end ? "right" : "center", "verticalAlign" => "bottom")
+    Dict{String,Any}("type" => "text", "x" => topx(n.x + d * sin(θ)), "y" => topx(n.y + d * cos(θ)), "rotation" => θ, "z" => 10, "silent" => true, "style" => style)
 end
 
 # What the layout placed in the panels beside the marks, drawn where it put

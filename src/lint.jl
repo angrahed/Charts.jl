@@ -195,7 +195,13 @@ function lint(c::Chart; medium::Symbol = :print, errors = nothing, io::IO = stdo
 
     claim = title_claim(c, data_lds, sc)
     claim === nothing || add!("title-claim", claim...)
-    add!("rotated", :pass, "no rotated labels")
+    turned = [n for n in texts if n.angle != 0]
+    if isempty(turned)
+        add!("rotated", :pass, "no rotated labels")
+    else
+        add!("rotated", :warn, "the title \"$(first(turned).text)\" is turned on its side, so readers tilt their heads to read it: " *
+                               "stand it above the panel (\"axis.y.title.position\" => :top), or set it level (\"axis.y.title.angle\" => 0)")
+    end
 
     for r in out
         println(io, r)

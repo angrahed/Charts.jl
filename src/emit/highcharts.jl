@@ -60,10 +60,10 @@ function highcharts_options(c::Chart)
                                     "plotBorderWidth" => setting(t, "panel.border.color") === nothing ? 0 : topx(setting(t, "panel.border.width")),
                                     "marginLeft" => topx(P.x0), "marginRight" => W - topx(P.x1), "marginTop" => topx(P.y0), "marginBottom" => H - topx(P.y1),
                                     "animation" => Dict("duration" => 500)),
-        "title" => Dict("text" => title, "align" => "left", "x" => 0, "style" => Dict("fontSize" => fs("title.size"), "fontWeight" => string(setting(t, "title.weight")),
-                                                                                     "color" => setting(t, "title.color"))),
-        "subtitle" => Dict("text" => sub, "align" => "left", "x" => 0, "style" => Dict("fontSize" => fs("subtitle.size"), "color" => setting(t, "subtitle.color"))),
-        "caption" => Dict("text" => source, "style" => Dict("fontSize" => fs("source.size"), "color" => setting(t, "source.color"))),
+        "title" => Dict("text" => title, "align" => hc_align(t, "title"), "x" => 0, "style" => Dict("fontSize" => fs("title.size"), "fontWeight" => string(setting(t, "title.weight")),
+                                                                                              "color" => setting(t, "title.color"))),
+        "subtitle" => Dict("text" => sub, "align" => hc_align(t, "subtitle"), "x" => 0, "style" => Dict("fontSize" => fs("subtitle.size"), "color" => setting(t, "subtitle.color"))),
+        "caption" => Dict("text" => source, "align" => hc_align(t, "source"), "style" => Dict("fontSize" => fs("source.size"), "color" => setting(t, "source.color"))),
         "credits" => Dict("enabled" => false),
         "colors" => palette(t),
         "legend" => Dict("enabled" => guide === :legend && pos !== :none, "align" => pos === :right ? "right" : "left",
@@ -96,11 +96,23 @@ function highcharts_options(c::Chart)
     o
 end
 
+hc_align(t::Theme, el) = string(setting(t, "$el.align"))
+
+# An axis's title by the axis: along it, "low" is the left of x and the foot of y.
+function hc_title(t::Theme, ax::Symbol, st::AxisTitle)
+    face = element_font(t, "axis.$ax.title")
+    Dict{String,Any}("text" => st.text, "align" => st.align === :start ? "low" : st.align === :end ? "high" : "middle",
+                     "rotation" => -st.angle,                       # Highcharts turns clockwise
+                     "style" => Dict("color" => setting(t, "axis.$ax.title.color"), "fontSize" => "$(topx(setting(t, "axis.$ax.title.size")))px",
+                                     "fontWeight" => string(face.weight), "fontStyle" => string(face.style)))
+end
+
 function hc_axis(e::Emitted, ax::Symbol)
     t = e.ctx.theme
     s = getfield(e.sc, ax)
     vaxis = value_axis(e.lds)
-    a = Dict{String,Any}("title" => Dict("text" => nothing), "gridLineWidth" => ax in grid_axes(t, vaxis) && s isa ContinuousScale ? topx(setting(t, "grid.width")) : 0,
+    st = side_title(e, ax)
+    a = Dict{String,Any}("title" => st === nothing ? Dict("text" => nothing) : hc_title(t, ax, st), "gridLineWidth" => ax in grid_axes(t, vaxis) && s isa ContinuousScale ? topx(setting(t, "grid.width")) : 0,
                          "gridLineColor" => setting(t, "grid.color"), "lineWidth" => setting(t, "axis.$ax.line.color") === nothing ? 0 : topx(setting(t, "axis.$ax.line.width")),
                          "tickLength" => has_ticks(t, ax, vaxis, s) ? topx(setting(t, "axis.tick.length")) : 0, "tickColor" => setting(t, "axis.tick.color"),
                          "labels" => Dict{String,Any}("style" => Dict("color" => setting(t, "axis.$ax.label.color"), "fontSize" => "$(topx(setting(t, "axis.$ax.label.size")))px")))

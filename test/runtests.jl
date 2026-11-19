@@ -759,6 +759,85 @@ selected("house themes") && @testset "house themes: presets, responsive rules, t
     @test C.parse_json("{\"a\": [1, 2.5, \"x\\u00e9\", true, null]}") == Dict("a" => Any[1, 2.5, "xé", true, nothing])
 end
 
+selected("axis titles") && @testset "axis titles and headings: placed, aligned, turned" begin
+    cars = (weight = [1.0, 2.5, 3.2, 4.8, 5.1, 6.3, 7.7, 8.2], fuel = [2.1, 3.9, 3.1, 5.6, 4.4, 6.8, 6.1, 8.0])
+    sc = chart(data(cars) * mapping(:weight => "Weight (tonnes)", :fuel => "Fuel (litres)") * point(); title = "Heavier cars use more fuel")
+    texts(c) = nodes_of(C.TextNode, build(c))
+    one(c, id) = only(n for n in texts(c) if n.id == id)
+    panel(c) = only(n for n in C.nodes(build(c)) if n isa C.RectNode && n.id == "panel-border")
+    framed(c) = c |> theme("panel.border.color" => :grid)
+    # by default: the y title above the panel as a unit line, the x title under its labels at the panel's right
+    d = framed(sc)
+    @test one(d, "axis-title").text == "Fuel (litres)" && one(d, "axis-title").angle == 0
+    @test one(d, "axis-x-title").anchor === :end && one(d, "axis-x-title").x ≈ panel(d).x + panel(d).w
+    @test !any(n -> n.id == "axis-y-title", texts(d))
+    # turned to read upwards by the y axis, centred on the panel, as in R and Stata; the x title centred
+    st = framed(sc) |> theme("axis.y.title.angle" => 90, "axis.x.title.align" => :center)
+    y, x, p = one(st, "axis-y-title"), one(st, "axis-x-title"), panel(st)
+    @test y.angle == 90 && y.anchor === :middle && y.y ≈ p.y + p.h / 2 && y.x < p.x
+    @test !any(n -> n.id == "axis-title", texts(st))
+    @test x.anchor === :middle && x.x ≈ p.x + p.w / 2
+    @test p.x > panel(d).x                                                      # the labels made room for it
+    @test minimum(n.x for n in texts(st) if n.id == "axis-y") > y.x + C.descent(y.face, y.size)
+    @test occursin("transform=\"rotate(-90 ", svg(st))
+    @test any(r -> r.property == "y.title" && r.rule == "axis-title", build(st).rules)
+    # at the foot or the top; read downwards; or level at the left
+    ft = framed(sc) |> theme("axis.y.title.angle" => 90, "axis.y.title.align" => :start)
+    @test one(ft, "axis-y-title").anchor === :start && one(ft, "axis-y-title").y ≈ panel(ft).y + panel(ft).h
+    @test one(sc |> theme("axis.y.title.align" => :center), "axis-title").anchor === :middle   # aligned above the panel, where it stood
+    down = framed(sc) |> theme("axis.y.title.angle" => -90, "axis.y.title.align" => :end)
+    @test one(down, "axis-y-title").anchor === :start && one(down, "axis-y-title").y ≈ panel(down).y
+    lvl = sc |> theme("axis.y.title.position" => :axis, "axis.y.title.angle" => 0)
+    @test one(lvl, "axis-y-title").angle == 0 && one(lvl, "axis-y-title").x == 0.0
+    @test one(sc |> theme("axis.x.title.align" => :start), "axis-x-title").anchor === :start
+    # placing a title shows it, though a subtitle states the measure; `false` hides it wherever it is placed
+    @test !any(n -> n.id in ("axis-title", "axis-y-title"), texts(lines_chart()))
+    @test one(lines_chart() |> theme("axis.y.title.position" => :axis), "axis-y-title").text == "growth"
+    @test !any(n -> n.id == "axis-y-title", texts(lines_chart() |> theme("axis.y.title.angle" => 90, "axis.y.titles" => false)))
+    # horizontal bars: the value axis's title under its labels, the categories' turned by them
+    world = (gdp = [21.0, 13.1, 3.6, 11.2], country = ["Poland", "Türkiye", "Egypt", "Kazakhstan"])
+    hb = chart(data(world) * mapping(:gdp, :country) * bar()) |> theme("axis.title.position" => :axis)
+    @test one(hb, "axis-x-title").text == "gdp" && one(hb, "axis-y-title").text == "country" && one(hb, "axis-y-title").angle == 90
+    # small multiples: the y title runs along the whole grid
+    fc = chart(data(MACRO) * mapping(:year, :growth) * line(), facet(:region; ncol = 2)) |> theme("axis.y.title.angle" => 90)
+    borders = [n for n in C.nodes(build(framed(fc))) if n isa C.RectNode && n.id == "panel-border"]
+    @test one(framed(fc), "axis-y-title").y ≈ (minimum(b.y for b in borders) + maximum(b.y + b.h for b in borders)) / 2
+    # headings: the title, subtitle and source across the chart
+    hd = chart(data(cars) * mapping(:weight, :fuel) * point(); title = "Centred", subtitle = "Also", source = "Source: right") |>
+         theme("title.align" => :center, "subtitle.align" => :center, "source.align" => :right)
+    W = build(hd).width
+    @test one(hd, "title").anchor === :middle && one(hd, "title").x ≈ W / 2
+    @test one(hd, "subtitle").anchor === :middle && one(hd, "source").anchor === :end && one(hd, "source").x ≈ W
+    @test one(sc |> theme("axis.title.style" => :italic, "axis.y.title.angle" => 90), "axis-y-title").face.style === :italic
+    # what the theme accepts
+    @test_throws ArgumentError theme("axis.x.title.angle" => 90)                # x titles stay level
+    @test_throws ArgumentError theme("axis.y.title.angle" => 45)
+    @test_throws ArgumentError theme("title.align" => :middle)
+    @test_throws ArgumentError theme("axis.title.position" => :left)
+    # print draws turned text, and lint says it is turned
+    mktempdir() do dir
+        save(joinpath(dir, "t.png"), st)
+        save(joinpath(dir, "t.pdf"), st)
+        @test filesize(joinpath(dir, "t.png")) > 0 && filesize(joinpath(dir, "t.pdf")) > 0
+    end
+    rs = lint(st; io = devnull)
+    @test only(r for r in rs if r.check == "rotated").status === :warn
+    @test only(r for r in lint(sc; io = devnull) if r.check == "rotated").status === :pass
+    # the emitters carry them: Vega-Lite and Highcharts as axis titles, ECharts where the layout put them
+    vl = vegalite(st |> theme("title.align" => :center))
+    @test occursin("\"titleAngle\":270", vl) && occursin("\"titleAnchor\":\"middle\"", vl) && occursin("\"anchor\":\"middle\"", vl)
+    ec = C.parse_json(echarts(st))
+    @test any(g -> get(g, "rotation", 0.0) ≈ π / 2 && g["style"]["text"] == "Fuel (litres)", ec["graphic"])
+    @test any(g -> get(g, "style", Dict())["text"] == "Weight (tonnes)", ec["graphic"])
+    hc = C.highcharts_options(st |> theme("title.align" => :center))
+    @test hc["yAxis"]["title"]["rotation"] == -90 && hc["yAxis"]["title"]["align"] == "middle" && hc["xAxis"]["title"]["align"] == "middle"
+    @test hc["title"]["align"] == "center"
+    # a composite's heading, in print and on the web
+    comp = chart(sc | sc; title = "Two") |> theme("title.align" => :center)
+    @test only(n for n in C.nodes(build(comp)) if n isa C.TextNode && n.id == "title" && n.text == "Two").anchor === :middle
+    @test occursin("text-align:center", C.html(comp))
+end
+
 selected("composition") && @testset "composition: | and /" begin
     a = lines_chart()
     b = chart(data(MACRO) * mapping(:year, :growth, color = :region) * point(); title = "Points")
@@ -1026,12 +1105,12 @@ selected("window") && @testset "window: a chart for part of its data, as a live 
 end
 
 selected("scene json") && @testset "scene json: the frozen format, written and read" begin
-    @test C.SCENE_SCHEMA == v"1.0.0"
+    @test C.SCENE_SCHEMA == v"1.1.0"
     c = lines_chart()
     s = build(c)
     j = scene_json(s)
     d = C.parse_json(j)
-    @test d["schema"] == "1.0.0" && d["width"] == round(s.width; digits = 2) && d["root"]["type"] == "group"
+    @test d["schema"] == "1.1.0" && d["width"] == round(s.width; digits = 2) && d["root"]["type"] == "group"
     @test Set(keys(d)) == Set(["schema", "width", "height", "title", "description", "summary", "rules", "root"])
     s2 = read_scene(j)
     @test svg(s; uid = "u") == svg(s2; uid = "u")                                   # the same drawing, read back
@@ -1048,10 +1127,19 @@ selected("scene json") && @testset "scene json: the frozen format, written and r
     # built for the web, a scene carries the interaction subtree
     w = C.parse_json(scene_json(c))
     @test haskey(w, "interaction") && Set(keys(w["interaction"])) == Set(["behaviours", "x", "y", "panels", "series", "layers", "style"])
-    @test_throws ArgumentError read_scene(replace(j, "\"schema\":\"1.0.0\"" => "\"schema\":\"2.0.0\""))
+    @test_throws ArgumentError read_scene(replace(j, "\"schema\":\"1.1.0\"" => "\"schema\":\"2.0.0\""))
+    # 1.1 adds a text's angle: written only for turned text, so a 1.0 scene reads as it did
+    @test !occursin("\"angle\"", j)
+    unversioned(x) = replace(x, r" data-schema=\"[^\"]*\"" => "")
+    @test unversioned(svg(s; uid = "u")) == unversioned(svg(read_scene(replace(j, "\"schema\":\"1.1.0\"" => "\"schema\":\"1.0.0\"")); uid = "u"))
+    turned = build(c |> theme("axis.y.title.angle" => 90))
+    tj = scene_json(turned)
+    @test occursin("\"angle\":90", tj)
+    @test only(n for n in C.nodes(read_scene(tj).root) if n isa C.TextNode && n.id == "axis-y-title").angle == 90
+    @test svg(turned; uid = "u") == svg(read_scene(tj); uid = "u")
     mktempdir() do dir
         save(joinpath(dir, "c.scene.json"), c)
-        @test C.parse_json(read(joinpath(dir, "c.scene.json"), String))["schema"] == "1.0.0"
+        @test C.parse_json(read(joinpath(dir, "c.scene.json"), String))["schema"] == "1.1.0"
         @test_throws ArgumentError save(joinpath(dir, "c.json"), c)
     end
     @test isfile(C.SCHEMA_PATH) && C.parse_json(read(C.SCHEMA_PATH, String))["\$id"] == "urn:charts-jl:schema:scene:1.0"

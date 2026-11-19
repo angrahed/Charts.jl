@@ -233,6 +233,31 @@ test('shapes, borders and a legend at the right follow the stretch and the zoom'
   await page.close();
 });
 
+test('headings and axis titles keep their places as the layout stretches', async () => {
+  const page = await open('titles.html', 900);
+  const info = await page.evaluate(() => {
+    const svg = document.querySelector('.cj-l.cj-on svg');
+    const x = (role) => +svg.querySelector(`text[data-role="${role}"]`).getAttribute('x');
+    const border = svg.querySelector('[data-role="panel-border"]');
+    const yt = svg.querySelector('text[data-role="axis-y-title"]');
+    return {
+      vb: svg.viewBox.baseVal.width, W: JSON.parse(document.querySelector('script.cj-data').textContent).layouts
+        .find((l, i) => document.querySelectorAll('.cj-l')[i].classList.contains('cj-on')).width,
+      title: x('title'), subtitle: x('subtitle'), source: x('source'), xtitle: x('axis-x-title'),
+      panel: [+border.getAttribute('x'), +border.getAttribute('width')],
+      ytitle: [+yt.getAttribute('x'), yt.getAttribute('transform')],
+    };
+  });
+  assert.ok(info.vb > info.W + 1, 'stretched');
+  assert.ok(Math.abs(info.title - info.vb / 2) < 0.02, `the title stays centred: ${info.title} in ${info.vb}`);
+  assert.ok(Math.abs(info.subtitle - info.vb / 2) < 0.02, 'and the subtitle');
+  assert.ok(Math.abs(info.source - info.vb) < 0.02, 'the source stays at the right');
+  assert.ok(Math.abs(info.xtitle - (info.panel[0] + info.panel[1] / 2)) < 0.5, 'the x title stays centred on the panel');
+  assert.ok(info.ytitle[1].startsWith(`rotate(-90 ${info.ytitle[0]} `), 'the y title stays turned about its own point');
+  assert.deepEqual(page.errors, []);
+  await page.close();
+});
+
 test('annotations follow the data through a stretch and a zoom', async () => {
   const page = await open('annotated.html', 900);
   const info = () => page.evaluate(() => {

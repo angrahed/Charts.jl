@@ -201,7 +201,7 @@ moved(n::SymbolNode, dx, dy) = SymbolNode(n.x + dx, n.y + dy, n.r, n.shape, n.st
 moved(n::PathNode, dx, dy) = PathNode([(x + dx, y + dy) for (x, y) in n.points], n.style, n.id)
 moved(n::PolygonNode, dx, dy) = PolygonNode([(x + dx, y + dy) for (x, y) in n.points], n.style, n.id)
 moved(n::GradientNode, dx, dy) = GradientNode(n.x + dx, n.y + dy, n.w, n.h, n.stops, n.id)
-moved(n::TextNode, dx, dy) = TextNode(n.text, n.x + dx, n.y + dy, n.face, n.size, n.fill, n.anchor, n.width, n.id, n.halo, n.halowidth, n.opacity)
+moved(n::TextNode, dx, dy) = TextNode(n.text, n.x + dx, n.y + dy, n.face, n.size, n.fill, n.anchor, n.width, n.id, n.halo, n.halowidth, n.opacity, n.angle)
 function moved(g::GroupNode, dx, dy)
     data = [k == "anchor" ? (k => join(string.(round.(parse.(Float64, split(v, ",")) .+ (dx, dy); digits = 2)), ",")) : (k => v) for (k, v) in g.data]
     GroupNode(g.role, Node[moved(c, dx, dy) for c in g.children], g.clip === nothing ? nothing : (g.clip[1] + dx, g.clip[2] + dy, g.clip[3], g.clip[4]),
@@ -220,8 +220,9 @@ function heading(c::Composite, t::Theme, W, H)
         face, sz = element_font(t, el), setting(t, el == "title" ? "composite.title.size" : "$el.size")    # above the charts' own titles
         lh = el == "title" ? sz * setting(t, "title.lineheight") : sz * 1.25
         lines = wrap(face, s, sz, R - L)
+        hx, ha = aligned(t, el, L, R)
         for (i, l) in enumerate(lines)
-            push!(texts, textnode(l, L, y + ascent(face, sz) + (i - 1) * lh, face, sz, setting(t, "$el.color"); id = el))
+            push!(texts, textnode(l, hx, y + ascent(face, sz) + (i - 1) * lh, face, sz, setting(t, "$el.color"); id = el, anchor = ha))
         end
         y += ascent(face, sz) + (length(lines) - 1) * lh + descent(face, sz) + (el == "title" ? 0.6space : 0.0)
     end
@@ -230,8 +231,9 @@ function heading(c::Composite, t::Theme, W, H)
     if c.source !== nothing
         face, ss = element_font(t, "source"), setting(t, "source.size")
         lines = wrap(face, c.source, ss, R - L)
+        hx, ha = aligned(t, "source", L, R)
         for (i, l) in enumerate(reverse(lines))
-            push!(texts, etext(t, "source", l, L, H - mb - descent(face, ss) - (i - 1) * ss * 1.25; id = "source"))
+            push!(texts, etext(t, "source", l, hx, H - mb - descent(face, ss) - (i - 1) * ss * 1.25; anchor = ha, id = "source"))
         end
         bottom = H - mb - length(lines) * ss * 1.25 - 1.4space
     end
@@ -330,6 +332,8 @@ svg(c::Composite; kwargs...) = svg(build(c); kwargs...)
 # ---- on the web ----
 
 css_px(pt) = string(round(pt / px.pt; digits = 2), "px")
+# A heading's alignment as CSS, or nothing for the default, the left.
+text_align(t::Theme, el) = (a = setting(t, "$el.align"); a === :left ? "" : ";text-align:" * string(a))
 
 """
     html(c::Composite; page = false) -> String
@@ -350,7 +354,7 @@ function html(c::Composite; page::Bool = false, runtime::Bool = true, mount::Boo
         face = element_font(t, el)
         sz = setting(t, el == "title" ? "composite.title.size" : "$el.size")
         push!(texts, textnode(s, 0.0, 0.0, face, sz, setting(t, "$el.color")))
-        print(io, "<div class=\"cj-", el, "\" style=\"font-size:", css_px(sz), ";font-weight:", face.weight,
+        print(io, "<div class=\"cj-", el, "\" style=\"font-size:", css_px(sz), ";font-weight:", face.weight, text_align(t, el),
               ";color:", setting(t, "$el.color"), ";line-height:1.2;margin:0 0 ", k == length(heads) ? css_px(4setting(t, "space")) : "4px", "\">",
               xmlescape(s), "</div>")
     end
@@ -374,7 +378,7 @@ function html(c::Composite; page::Bool = false, runtime::Bool = true, mount::Boo
     if c.source !== nothing
         face = element_font(t, "source")
         push!(texts, textnode(c.source, 0.0, 0.0, face, setting(t, "source.size"), setting(t, "source.color")))
-        print(io, "<div class=\"cj-source\" style=\"font-size:", css_px(setting(t, "source.size")), ";color:", setting(t, "source.color"),
+        print(io, "<div class=\"cj-source\" style=\"font-size:", css_px(setting(t, "source.size")), text_align(t, "source"), ";color:", setting(t, "source.color"),
               ";margin-top:8px\">", xmlescape(c.source), "</div>")
     end
     isempty(texts) || print(io, "<style>", font_faces(used_chars(texts)), "</style>")

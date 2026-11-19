@@ -120,6 +120,7 @@ function lower!(out, t::C.TextNode)
         kw[:strokecolor] = rgba(t.halo, t.opacity)
         kw[:strokewidth] = t.halowidth * PX / 2
     end
+    t.angle == 0 || (kw[:rotation] = deg2rad(t.angle))      # turned on the screen, whichever way the axis runs
     push!(out, S.Text([Makie.Point2f(t.x, t.y)]; kw...))
 end
 

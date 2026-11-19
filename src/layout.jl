@@ -19,12 +19,74 @@ function wrap(face::FontFace, s::AbstractString, size, maxw)
     lines
 end
 
-textnode(s, x, y, face, size, color; anchor = :start, id = "", halo = nothing, halowidth = 0.0, opacity = 1.0) =
-    TextNode(String(s), x, y, face, size, color, anchor, text_width(face, s, size), id, halo, halowidth, opacity)
+textnode(s, x, y, face, size, color; anchor = :start, id = "", halo = nothing, halowidth = 0.0, opacity = 1.0, angle = 0.0) =
+    TextNode(String(s), x, y, face, size, color, anchor, text_width(face, s, size), id, halo, halowidth, opacity, Float64(angle))
 
 # Text in the style of a theme element ("title", "axis.x.label", "legend", ...).
-etext(t::Theme, el, s, x, y; anchor = :start, id = "", color = setting(t, "$el.color")) =
-    textnode(s, x, y, element_font(t, el), setting(t, "$el.size"), color; anchor, id)
+etext(t::Theme, el, s, x, y; anchor = :start, id = "", color = setting(t, "$el.color"), angle = 0.0) =
+    textnode(s, x, y, element_font(t, el), setting(t, "$el.size"), color; anchor, id, angle)
+
+# Where a heading ("title", "subtitle", "source") starts across [lo, hi], and its anchor.
+function aligned(t::Theme, el, lo, hi)
+    a = setting(t, "$el.align")
+    a === :center ? ((lo + hi) / 2, :middle) : a === :right ? (hi, :end) : (lo, :start)
+end
+
+"""How an axis's title is set: where it stands (above the panels, or by its
+axis), where along that edge, and how far it is turned."""
+struct AxisTitle
+    text::String
+    position::Symbol          # :top, as a unit line under the subtitle, or :axis, by the axis's labels
+    align::Symbol             # :start (the left of x, the foot of y), :center or :end
+    angle::Float64            # degrees anticlockwise: 90 reads upwards
+end
+
+# Each axis's title, or nothing. By default the value axis's title stands
+# above the panels as a unit line when no subtitle states the measure, and x's
+# stands under its labels, at the right, when its numbers are not dates or
+# years, which name themselves. `"axis.titles" => true` shows both (and a
+# categorical x's); placing a title, by its position, alignment or angle,
+# shows that one; `false` hides it wherever it is placed. The emitters ask
+# again, without the notes.
+function axis_titles(ctx::Context, sc::Scales, vaxis::Symbol; notes::Bool = true)
+    t, c = ctx.theme, ctx.chart
+    out = Dict{Symbol,Union{Nothing,AxisTitle}}()
+    for ax in (:x, :y)
+        s = ax == :x ? sc.x : sc.y
+        shown = setting(t, "axis.$ax.titles")
+        pos, align = setting(t, "axis.$ax.title.position"), setting(t, "axis.$ax.title.align")
+        angle = ax == :y ? setting(t, "axis.y.title.angle") : :auto
+        placed = pos !== :auto || align !== :auto || angle !== :auto
+        isvalue = ax == vaxis && s isa ContinuousScale
+        why = if shown === false || isempty(s.label)
+            nothing
+        elseif placed
+            "the theme places the title"
+        elseif shown === true
+            isvalue || (ax == :x && vaxis == :y) ? "the theme asks for axis titles" : nothing
+        elseif isvalue
+            c.subtitle === nothing ? "no subtitle states the measure, so the axis label stands above the panel" : nothing
+        elseif ax == :x && vaxis == :y && s isa ContinuousScale && s.time === :none && s.format !== plain
+            "numbers along x name no measure of their own, unlike dates and years"
+        else
+            nothing
+        end
+        if why === nothing
+            notes && isvalue && c.subtitle !== nothing && shown !== false && note!(ctx, "axis titles", "none", "axis-title", "the subtitle states the measure")
+            out[ax] = nothing
+            continue
+        end
+        where = pos !== :auto ? pos : ax == :y && angle !== :auto && angle != 0 ? :axis : isvalue ? :top : :axis
+        θ = where === :top || ax == :x ? 0.0 : angle === :auto ? 90.0 : Float64(angle)
+        a = align !== :auto ? align : where === :top ? :start : ax == :x ? :end : :center
+        notes && note!(ctx, "$ax.title", repr(s.label), "axis-title", why)
+        if notes && ax == :y && where === :axis && angle === :auto
+            note!(ctx, "y.title.angle", "90", "axis-title", "a title by the y axis reads upwards along it, as in R and Stata")
+        end
+        out[ax] = AxisTitle(s.label, where, a, θ)
+    end
+    out
+end
 
 # One-dimensional label dodging: keep labels in order, at least `gap` apart and
 # within [lo, hi], as close to their anchors as a few relaxation passes allow.
@@ -311,31 +373,30 @@ function layout_pass(ctx::Context, lds, sc::Scales, guide::Symbol, xlines::Int; 
         face, ts = element_font(t, "title"), setting(t, "title.size")
         lh = ts * setting(t, "title.lineheight")
         lines = wrap(face, c.title, ts, CW)
+        hx, ha = aligned(t, "title", L, R)
         for (i, l) in enumerate(lines)
-            push!(texts, etext(t, "title", l, L, y + ascent(face, ts) + (i - 1) * lh; id = "title"))
+            push!(texts, etext(t, "title", l, hx, y + ascent(face, ts) + (i - 1) * lh; anchor = ha, id = "title"))
         end
         y += ascent(face, ts) + (length(lines) - 1) * lh + descent(face, ts) + 0.6space
     end
-    # Without a subtitle, the value axis's label takes its place as a unit line;
-    # with `"axis.titles" => true` it stands under the subtitle too.
-    titles = setting(t, "axis.titles")
-    vscale = vaxis == :y ? sc.y : sc.x
-    heads = Tuple{String,String}[]                  # (element, text) above the panel
-    c.subtitle === nothing || push!(heads, ("subtitle", c.subtitle))
-    if vscale isa ContinuousScale && titles !== false && (c.subtitle === nothing || titles === true)
-        push!(heads, ("axis.title", vscale.label))
-        note!(ctx, "$vaxis.title", repr(vscale.label), "axis-title", titles === true ? "the theme asks for axis titles" :
-              "no subtitle states the measure, so the axis label stands above the panel")
-    elseif c.subtitle !== nothing
-        note!(ctx, "axis titles", "none", "axis-title", "the subtitle states the measure")
+    # Titles above the panels stand under the subtitle: by default the value
+    # axis's, as a unit line, when no subtitle states the measure.
+    at = axis_titles(ctx, sc, vaxis)
+    heads = Tuple{String,String,Float64,Symbol}[]   # (element, text, x, anchor) above the panel
+    c.subtitle === nothing || push!(heads, ("subtitle", c.subtitle, aligned(t, "subtitle", L, R)...))
+    for ax in (vaxis, vaxis == :y ? :x : :y)
+        a = at[ax]
+        (a === nothing || a.position !== :top) && continue
+        push!(heads, ("axis.$ax.title", a.text, a.align === :center ? (L + R) / 2 : a.align === :end ? R : L,
+                      a.align === :center ? :middle : a.align === :end ? :end : :start))
     end
-    for (el, text_) in heads
+    for (k, (el, text_, hx, ha)) in enumerate(heads)
         face, ss = element_font(t, el), setting(t, "$el.size")
         lines = wrap(face, text_, ss, CW)
         for (i, l) in enumerate(lines)
-            push!(texts, etext(t, el, l, L, y + ascent(face, ss) + (i - 1) * ss * 1.25; id = el == "subtitle" ? "subtitle" : "axis-title"))
+            push!(texts, etext(t, el, l, hx, y + ascent(face, ss) + (i - 1) * ss * 1.25; anchor = ha, id = el == "subtitle" ? "subtitle" : "axis-title"))
         end
-        y += ascent(face, ss) + (length(lines) - 1) * ss * 1.25 + descent(face, ss) + (el == last(heads)[1] ? 0.0 : 0.4space)
+        y += ascent(face, ss) + (length(lines) - 1) * ss * 1.25 + descent(face, ss) + (k == length(heads) ? 0.0 : 0.4space)
     end
     y += 2.2space
 
@@ -353,8 +414,9 @@ function layout_pass(ctx::Context, lds, sc::Scales, guide::Symbol, xlines::Int; 
     if c.source !== nothing
         face, ss = element_font(t, "source"), setting(t, "source.size")
         lines = wrap(face, c.source, ss, CW)
+        hx, ha = aligned(t, "source", L, R)
         for (i, l) in enumerate(reverse(lines))
-            push!(texts, etext(t, "source", l, L, H - mb - descent(face, ss) - (i - 1) * ss * 1.25; id = "source"))
+            push!(texts, etext(t, "source", l, hx, H - mb - descent(face, ss) - (i - 1) * ss * 1.25; anchor = ha, id = "source"))
         end
         bottom = H - mb - length(lines) * ss * 1.25 - 1.4space
     end
@@ -376,9 +438,13 @@ function layout_pass(ctx::Context, lds, sc::Scales, guide::Symbol, xlines::Int; 
         draw_legend!(legend, ctx, groups, L, bottom, CW, false)
         bottom -= 1.2space
     end
-    if vaxis == :y && titles !== false && (titles === true || (sc.x isa ContinuousScale && sc.x.time === :none && sc.x.format !== plain))
+    # An x title by its axis: its line is kept here, and it is placed along the
+    # panels once they are.
+    xt = at[:x] !== nothing && at[:x].position === :axis ? at[:x] : nothing
+    xtitle_y = 0.0
+    if xt !== nothing
         face, xs = element_font(t, "axis.x.title"), setting(t, "axis.x.title.size")
-        push!(texts, etext(t, "axis.x.title", sc.x.label, R, bottom - descent(face, xs); anchor = :end, id = "axis-x-title"))
+        xtitle_y = bottom - descent(face, xs)
         bottom -= xs * 1.3
     end
 
@@ -415,6 +481,22 @@ function layout_pass(ctx::Context, lds, sc::Scales, guide::Symbol, xlines::Int; 
     else
         ylabels = string.(sc.y.levels)
         left = min(0.4CW, maximum(text_width(yface, l, lsy) for l in ylabels; init = 0.0) + 2space + ytick)
+    end
+    # A y title by its axis stands at the chart's left edge, turned to run
+    # along the panels (wrapped to their height) or level (wrapped to a quarter
+    # of the chart's width), and the labels make room for it.
+    yt = at[:y] !== nothing && at[:y].position === :axis ? at[:y] : nothing
+    ytitle_lines, yband = String[], 0.0
+    if yt !== nothing
+        face, ys = element_font(t, "axis.y.title"), setting(t, "axis.y.title.size")
+        if yt.angle == 0
+            ytitle_lines = wrap(face, yt.text, ys, 0.25CW)
+            yband = maximum(text_width(face, l, ys) for l in ytitle_lines)
+        else
+            ytitle_lines = wrap(face, yt.text, ys, rowtop(nrow) + ph - rowtop(1))
+            yband = ascent(face, ys) + (length(ytitle_lines) - 1) * ys * 1.25 + descent(face, ys)
+        end
+        left += yband + 1.2space
     end
 
     # The right margin: line-end labels, row strips, a legend, or room for the last x label.
@@ -507,6 +589,34 @@ function layout_pass(ctx::Context, lds, sc::Scales, guide::Symbol, xlines::Int; 
 
     panels = [PanelGeom(i, r, k, L + left + (k - 1) * (pw + gap), rowtop(r), L + left + (k - 1) * (pw + gap) + pw, rowtop(r) + ph, rl, cl)
               for (i, (r, k, rl, cl)) in enumerate(cells)]
+    # Axis titles by their axes, along the panels' extent.
+    if xt !== nothing
+        x0, x1 = minimum(p.x0 for p in panels), maximum(p.x1 for p in panels)
+        w = text_width(element_font(t, "axis.x.title"), xt.text, setting(t, "axis.x.title.size"))
+        hx, ha = xt.align === :start ? (x0, :start) : xt.align === :end ? (x1, :end) : (clamp((x0 + x1) / 2, L + w / 2, max(L + w / 2, R - w / 2)), :middle)
+        push!(texts, etext(t, "axis.x.title", xt.text, hx, xtitle_y; anchor = ha, id = "axis-x-title"))
+    end
+    if yt !== nothing
+        face, ys = element_font(t, "axis.y.title"), setting(t, "axis.y.title.size")
+        lh = ys * 1.25
+        ya, yb = rowtop(1), rowtop(nrow) + ph
+        if yt.angle == 0
+            h = ascent(face, ys) + (length(ytitle_lines) - 1) * lh + descent(face, ys)
+            top = yt.align === :start ? yb - h : yt.align === :end ? ya : (ya + yb - h) / 2
+            for (i, l) in enumerate(ytitle_lines)
+                push!(texts, etext(t, "axis.y.title", l, L, top + ascent(face, ys) + (i - 1) * lh; id = "axis-y-title"))
+            end
+        else
+            up = yt.angle > 0                  # reading upwards, the text starts at the foot
+            ty = yt.align === :start ? yb : yt.align === :end ? ya : (ya + yb) / 2
+            ta = yt.align === :center ? :middle : (yt.align === :start) == up ? :start : :end
+            for (i, l) in enumerate(ytitle_lines)
+                # the first line is the farthest from the panels: the tops of its letters face away from them
+                bx = up ? L + ascent(face, ys) + (i - 1) * lh : L + yband - ascent(face, ys) - (i - 1) * lh
+                push!(texts, etext(t, "axis.y.title", l, bx, ty; anchor = ta, id = "axis-y-title", angle = yt.angle))
+            end
+        end
+    end
     occupied = Set((p.row, p.col) for p in panels)
     gs = Style(stroke = setting(t, "grid.color"), width = setting(t, "grid.width"), dash = setting(t, "grid.dash"))
     minor = setting(t, "grid.minor") ? Style(stroke = setting(t, "grid.minor.color"), width = setting(t, "grid.minor.width")) : nothing

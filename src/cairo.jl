@@ -161,16 +161,25 @@ end
 function draw_cairo(cr, t::TextNode)
     ccall((:cairo_set_font_face, libcairo), Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), cr, cairo_face(t.face))
     ccall((:cairo_set_font_size, libcairo), Cvoid, (Ptr{Cvoid}, Cdouble), cr, t.size)
-    x = t.anchor === :middle ? t.x - t.width / 2 : t.anchor === :end ? t.x - t.width : t.x
+    # turned text is drawn level about the origin, in a space turned about (x, y)
+    turned = t.angle != 0
+    if turned
+        ccall((:cairo_save, libcairo), Cvoid, (Ptr{Cvoid},), cr)
+        ccall((:cairo_translate, libcairo), Cvoid, (Ptr{Cvoid}, Cdouble, Cdouble), cr, t.x, t.y)
+        ccall((:cairo_rotate, libcairo), Cvoid, (Ptr{Cvoid}, Cdouble), cr, -deg2rad(t.angle))    # y points down: anticlockwise is negative
+    end
+    x0, y0 = turned ? (0.0, 0.0) : (t.x, t.y)
+    x = t.anchor === :middle ? x0 - t.width / 2 : t.anchor === :end ? x0 - t.width : x0
     if t.halo !== nothing && t.halowidth > 0
-        move_to(cr, x, t.y)
+        move_to(cr, x, y0)
         ccall((:cairo_text_path, libcairo), Cvoid, (Ptr{Cvoid}, Cstring), cr, t.text)
         fill_and_stroke(cr, Style(stroke = t.halo, width = t.halowidth, opacity = t.opacity, join = :round))
     end
     set_rgba(cr, t.fill, t.opacity)
-    move_to(cr, x, t.y)
+    move_to(cr, x, y0)
     ccall((:cairo_show_text, libcairo), Cvoid, (Ptr{Cvoid}, Cstring), cr, t.text)
     ccall((:cairo_new_path, libcairo), Cvoid, (Ptr{Cvoid},), cr)
+    turned && ccall((:cairo_restore, libcairo), Cvoid, (Ptr{Cvoid},), cr)
 end
 
 # ---- batches: layers of many marks ----

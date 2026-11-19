@@ -60,7 +60,9 @@ function vegalite_spec(c::Chart)
     heads = [n for n in nodes(e.scene) if n isa TextNode && n.id in ("title", "subtitle", "axis-title")]
     title = join((n.text for n in heads if n.id == "title"), " ")
     sub = [n.text for n in heads if n.id != "title"]
-    isempty(title) || (spec["title"] = Dict{String,Any}("text" => title, "subtitle" => isempty(sub) ? nothing : sub))
+    align = setting(t, "title.align")
+    isempty(title) || (spec["title"] = Dict{String,Any}("text" => title, "subtitle" => isempty(sub) ? nothing : sub,
+                                                        "anchor" => align === :center ? "middle" : align === :right ? "end" : "start"))
     if faceted
         f = sc.facets
         hdr = Dict("title" => nothing)
@@ -87,7 +89,8 @@ function vegalite_spec(c::Chart)
         below = [n.y + 0.25n.size for n in nodes(e.scene) if n isa TextNode && n.id != "source" && n.y < src.y]
         gap = isempty(below) ? 2setting(t, "space") : src.y - 0.75src.size - maximum(below)
         foot = Dict{String,Any}("data" => Dict("values" => [Dict("text" => join(source, " "))]), "width" => topx(P.x1 - P.x0), "height" => 1,
-                                "mark" => Dict("type" => "text", "align" => "left", "baseline" => "top", "x" => topx(src.x - P.x0), "y" => 0,
+                                "mark" => Dict("type" => "text", "align" => src.anchor === :start ? "left" : src.anchor === :end ? "right" : "center",
+                                               "baseline" => "top", "x" => topx(src.x - P.x0), "y" => 0,
                                                "fontSize" => topx(setting(t, "source.size")), "color" => setting(t, "source.color")),
                                 "encoding" => Dict("text" => Dict("field" => "text")), "view" => Dict("stroke" => nothing))
         spec["vconcat"] = [inner, foot]
@@ -130,6 +133,18 @@ function vl_axis(e::Emitted, ax::Symbol, zoom::Bool)
     vaxis = value_axis(e.lds)
     a = Dict{String,Any}("title" => nothing, "grid" => ax in grid_axes(t, vaxis) && s isa ContinuousScale, "ticks" => has_ticks(t, ax, vaxis, s),
                          "domain" => setting(t, "axis.$ax.line.color") !== nothing, "labelFlush" => false)
+    st = side_title(e, ax)
+    if st !== nothing
+        face = element_font(t, "axis.$ax.title")
+        merge!(a, Dict{String,Any}("title" => st.text, "titleAnchor" => st.align === :center ? "middle" : string(st.align),
+                                   "titleFont" => face.family, "titleFontSize" => topx(setting(t, "axis.$ax.title.size")),
+                                   "titleFontWeight" => face.weight, "titleFontStyle" => string(face.style),
+                                   "titleColor" => setting(t, "axis.$ax.title.color")))
+        if ax == :y
+            a["titleAngle"] = mod(-st.angle, 360)                  # Vega turns clockwise
+            st.angle == 0 && merge!(a, Dict("titleAlign" => "right", "titleBaseline" => "middle"))
+        end
+    end
     s isa CategoricalScale && return (a["labelAngle"] = 0; a)
     if !zoom
         # the ticks Charts.jl chose, labelled as it labels them

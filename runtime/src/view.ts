@@ -175,8 +175,9 @@ export class View {
   xview: AxisView;
   yview: AxisView;
   vaxis: 'x' | 'y' | null = null; // the axis gridlines measure
-  private xTitle: SVGTextElement | null;
-  private xTitleX = 0;
+  // headings and the x title, which keep their place across the panels as they stretch:
+  // `k` is how much of the stretch moves each (0 at the left, 1/2 centred, 1 at the right)
+  private heads: { el: SVGTextElement; x: number; k: number }[] = [];
   private background: SVGRectElement | null;
   private legendRight: SVGGElement | null;
   private templates: Record<string, Element | null> = {};
@@ -196,8 +197,12 @@ export class View {
     this.width = this.W;
     this.xview = { domain: layout.x.domain, ticks: layout.x.ticks, labels: layout.x.labels };
     this.yview = { domain: layout.y.domain, ticks: layout.y.ticks, labels: layout.y.labels };
-    this.xTitle = this.svg.querySelector('text[data-role="axis-x-title"]');
-    if (this.xTitle) this.xTitleX = num(this.xTitle, 'x');
+    for (const el of this.svg.querySelectorAll<SVGTextElement>('g[data-role="chart"] > g[data-role="text"] > text')) {
+      if (el.getAttribute('data-role') === 'axis-y-title') continue; // at the left edge, level or turned
+      const a = el.getAttribute('text-anchor');
+      const k = a === 'middle' ? 0.5 : a === 'end' ? 1 : 0;
+      if (k) this.heads.push({ el, x: num(el, 'x'), k });
+    }
     this.background = this.svg.querySelector('rect[data-role="background"]');
     this.legendRight = this.svg.querySelector('g[data-role="legend"][data-key="right"]');
     this.read();
@@ -478,7 +483,7 @@ export class View {
     this.svg.setAttribute('viewBox', `0 0 ${f2(width)} ${f2(this.H)}`);
     this.svg.setAttribute('width', `${f2(width)}pt`);
     if (this.background) this.background.setAttribute('width', f2(width));
-    if (this.xTitle) this.xTitle.setAttribute('x', f2(this.xTitleX + dw));
+    for (const h of this.heads) h.el.setAttribute('x', f2(h.x + h.k * dw));
     if (this.legendRight) this.legendRight.setAttribute('transform', dw ? `translate(${f2(dw)},0)` : '');
   }
 

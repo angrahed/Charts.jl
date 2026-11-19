@@ -4,7 +4,7 @@
 # every string of text carries its face, size and measured width. The scene
 # is public, so other renderers and tools can start from it.
 
-const SCENE_SCHEMA = v"1.0.0"           # frozen: see src/scenejson.jl and assets/schema
+const SCENE_SCHEMA = v"1.1.0"           # frozen: see src/scenejson.jl and assets/schema (1.1 adds a text's angle)
 
 """
     Style
@@ -147,8 +147,11 @@ struct TextNode <: Node
     halo::Union{Nothing,String}   # a stroke behind the letters, to stand out from what is under them
     halowidth::Float64
     opacity::Float64
+    angle::Float64            # degrees anticlockwise about (x, y): 90 reads upwards, as a y title at the side
 end
-TextNode(text, x, y, face, size, fill, anchor, width, id) = TextNode(text, x, y, face, size, fill, anchor, width, id, nothing, 0.0, 1.0)
+TextNode(text, x, y, face, size, fill, anchor, width, id) = TextNode(text, x, y, face, size, fill, anchor, width, id, nothing, 0.0, 1.0, 0.0)
+TextNode(text, x, y, face, size, fill, anchor, width, id, halo, halowidth, opacity) =
+    TextNode(text, x, y, face, size, fill, anchor, width, id, halo, halowidth, opacity, 0.0)
 
 struct GroupNode <: Node
     role::String              # "title", "panel", "marks", "axis-x", "legend", ...

@@ -117,6 +117,7 @@ c |> highlight(:region => "East") |>                                  # the East
 - **`lint(c)`** checks contrast for text (4.5:1) and marks (3:1), colours under simulated colour-vision deficiency and in greyscale, colour used alone, text size, missing title or source, too many colours, bars that do not start at zero, line axes that exaggerate, and a title whose "rose" or "fell" the data contradict. `lint(c; errors = ["bar-zero"])`, or the theme's `"lint.errors"`, makes checks errors.
 - **Palettes**: `generate(["#1f63a8", "#d47627"]; n = 6)` grows a categorical palette from brand colours: hues spread round the wheel, at least 3:1 against the paper, as far apart as possible under normal vision and simulated protanopia, deuteranopia and tritanopia.
 - **House themes**: presets `theme(:explore)` (axis titles, gridlines both ways, a light frame) and `theme(:dark)`; `responsive(400px, "legend.position" => :bottom)` overrides for narrow layouts; `save("house.tokens.json", t)` writes a theme as W3C Design Tokens and `theme("house.tokens.json")` reads it back.
+- **Titles and headings**: `"title.align"`, `"subtitle.align"` and `"source.align"` take `:left`, `:center` or `:right`. An axis's title stands above the panels (`"axis.y.title.position" => :top`, the unit line under the subtitle) or by its axis (`:axis`); `"axis.x.title.align" => :center` centres it along the panels; `"axis.y.title.angle" => 90` turns the y title to read upwards beside its labels, as in R and Stata (`-90` reads down, `0` keeps it level). Placing a title shows it; `"axis.titles" => false`, or `"axis.y.titles" => false` for one axis, hides it. `lint` warns of turned text.
 - **Composition**: `a | b` places charts side by side and `a / b` stacks them; panels line up with their neighbours. `chart(a | b; title, source, widths = [2, 1])` gives the composite its own heading, `share(:y)` one domain, `collect_guides()` one legend, and parts attach to every chart inside: `(a | b) |> highlight(...)`. On the web each chart keeps its own behaviours.
 
 ## Selections, drilldown and time
@@ -180,7 +181,7 @@ live(chart(data(db, "trips") * mapping(:distance, :fare) * bin2d()); onselect = 
 ## Bridges, and the scene's format
 
 ```julia
-scene_json(c)                    # the scene as JSON: schema 1.0, frozen
+scene_json(c)                    # the scene as JSON: schema 1.1, frozen (1.1 adds a text's angle)
 read_scene(json)                 # read back, for Charts.jl's renderers: svg(scene), Charts.pdf(path, scene)
 vegalite(c)                      # a Vega-Lite 6 specification
 echarts(c)                       # an Apache ECharts 6 option

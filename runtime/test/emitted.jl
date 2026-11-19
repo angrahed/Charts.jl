@@ -53,6 +53,10 @@ charts = [
     "text" => chart(data(world) * mapping(:gdp, :life, label = :country) * (point() + text(dy = 6pt)); title = "Labels"),
     "rules" => chart(data(macro_) * mapping(:year, :growth) * point() + rule(y = 3); title = "A rule"),
     "zoom" => chart(data(macro_) * mapping(:year, :growth, color = :region) * line(), interact(zoom = :x); title = "Zoomable", subtitle = "Per cent"),
+    "titles" => chart(data(world) * mapping(:gdp => "GDP per head", :life => "Life expectancy") * point();
+                      title = "Titles placed", subtitle = "Centred, with a turned y title", source = "Source: illustrative data") |>
+                theme("title.align" => :center, "subtitle.align" => :center, "source.align" => :right,
+                      "axis.y.title.angle" => 90, "axis.x.title.align" => :center),
 ]
 for (name, c) in charts
     write(joinpath(out, "$name.vl.json"), vegalite(c))

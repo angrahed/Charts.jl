@@ -28,6 +28,13 @@ end
 
 topx(v::Real) = round(Float64(v) * PX_PER_PT; digits = 2)
 
+# An axis's title where the layout set it by the axis, or nothing. A title
+# above the panels is a heading, which the emitters write with the subtitle.
+function side_title(e::Emitted, ax::Symbol)
+    a = axis_titles(e.ctx, e.sc, value_axis(e.lds); notes = false)[ax]
+    a === nothing || a.position !== :axis ? nothing : a
+end
+
 # A value in a scale's transformed space as other libraries read it: data
 # units, times as Unix milliseconds, categories as text.
 function outvalue(s, v)

@@ -4,7 +4,7 @@
 
 The scene is the boundary between the grammar and the renderers, and as of version 1.0 it has a file format. `scene_json(c)` writes a chart's scene as JSON. The file holds every node with its geometry in points, every string with its measured width and font, and the notes behind the defaults. A chart built for the web adds the interaction model the runtime reads. `read_scene` reads the file back, and `save("chart.scene.json", c)` writes it ({{fig scenejson}}).
 
-The format is frozen at schema 1.0.0 and described by a JSON Schema, `assets/schema/scene-1.0.schema.json`, so a renderer in another language can be written against it and checked. A change to any node's fields will be a new version of the schema, and `read_scene` refuses a file of a major version it does not know.
+The format is frozen at schema 1.0.0 and described by a JSON Schema, `assets/schema/scene-1.0.schema.json`, so a renderer in another language can be written against it and checked. A change to any node's fields will be a new version of the schema, and `read_scene` refuses a file of a major version it does not know. Version 1.1.0 adds one optional field, a text's `angle`, for a y title turned beside its axis; it is written only for turned text, so a 1.0 reader reads every other scene.
 
 <!-- figure: scenejson -->
 

@@ -86,4 +86,8 @@ swarm = (x = randn(rng, 300_001), y = randn(rng, 300_001))
 save(joinpath(out, "webgl.html"), chart(data(swarm) * mapping(:x, :y) * point(size = 1.5pt, opacity = 0.3); title = "300,001 points"))
 walk = (t = collect(1.0:20_000.0), v = cumsum(randn(rng, 20_000)))
 save(joinpath(out, "m4.html"), chart(data(walk) * mapping(:t, :v) * line(stat = Charts.M4(200)), interact(zoom = :x); title = "20,000 steps"))
+save(joinpath(out, "titles.html"), chart(data(pts) * mapping(:x => "Weight (tonnes)", :y => "Fuel (litres)") * point();
+     title = "Centred", subtitle = "A turned y title", source = "Source: at the right") |>
+     theme("title.align" => :center, "subtitle.align" => :center, "source.align" => :right, "panel.border.color" => :grid,
+           "axis.y.title.angle" => 90, "axis.x.title.align" => :center))
 println("wrote the test pages to ", out)
